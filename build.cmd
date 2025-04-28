@@ -1,0 +1,3 @@
+C:\Users\403279\Documents\Projects\barebones\gcc\bin\i686-elf-gcc -std=gnu99 -ffreestanding -g -c C:\Users\403279\Documents\Projects\barebones\start.s -o C:\Users\403279\Documents\Projects\barebones\start.o
+C:\Users\403279\Documents\Projects\barebones\gcc\bin\i686-elf-gcc -std=gnu99 -ffreestanding -g -c C:\Users\403279\Documents\Projects\barebones\kernel.c -o C:\Users\403279\Documents\Projects\barebones\kernel.o
+C:\Users\403279\Documents\Projects\barebones\gcc\bin\i686-elf-gcc -ffreestanding -nostdlib -g -T C:\Users\403279\Documents\Projects\barebones\linker.ld C:\Users\403279\Documents\Projects\barebones\start.o C:\Users\403279\Documents\Projects\barebones\kernel.o -o C:\Users\403279\Documents\Projects\barebones\mykernel.elf -lgcc
