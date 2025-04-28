@@ -1,3 +1,3 @@
-i686-elf-gcc -std=gnu99 -ffreestanding -g -c start.s -o start.o
-i686-elf-gcc -std=gnu99 -ffreestanding -g -c kernel.c -o kernel.o
-i686-elf-gcc -ffreestanding -nostdlib -g -T linker.ld start.o kernel.o -o mykernel.elf -lgcc
+i686-elf-gcc -std=gnu99 -ffreestanding -g -c *.s *.c
+#i686-elf-gcc -std=gnu99 -ffreestanding -g -c kernel.c -o kernel.o
+i686-elf-gcc -ffreestanding -nostdlib -g -T linker.ld *.o -o mykernel.elf -lgcc
