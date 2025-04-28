@@ -1,3 +1,4 @@
 qemu
 gcc
 mykernel.elf
+*.o

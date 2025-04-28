@@ -159,6 +159,16 @@ void kernel_print(const char *s) {
     }
 }
 
+static inline void qemu_halt_exit(int code) {
+    asm volatile (
+        "mov   $0x501, %%dx   \n\t"  /* 0x501 is the isa-debug-exit port */
+        "outb  %0,       %%dx"
+        :
+        : "a"(code)                /* put ’code’ into AL */
+        : "dx"                     /* we clobber DX */
+    );
+}
+
 // -----------------------------------------------------------------------------
 // Your kernel entry point
 // -----------------------------------------------------------------------------
@@ -181,6 +191,8 @@ void kernel_main() {
     kernel_print("\033[44mBlue background\033[0m\n");
     kernel_print("Back to normal.\n");
 
+    qemu_halt_exit(0);
+    
     for (;;) {
         asm volatile("hlt");
     }
