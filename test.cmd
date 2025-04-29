@@ -1,1 +1,0 @@
-C:\Users\403279\Documents\Projects\barebones\qemu\qemu-system-i386 -kernel C:\Users\403279\Documents\Projects\barebones\mykernel.elf
