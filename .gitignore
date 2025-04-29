@@ -2,3 +2,4 @@ qemu
 gcc
 mykernel.elf
 *.o
+initfs/*.elf
