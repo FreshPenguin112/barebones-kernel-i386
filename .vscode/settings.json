@@ -6,6 +6,7 @@
         "string_utils.h": "c",
         "syscall.h": "c",
         "_string_utils.h": "c",
-        "io.h": "c"
+        "io.h": "c",
+        "hhh": "c"
     }
 }

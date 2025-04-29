@@ -3,3 +3,5 @@ gcc
 mykernel.elf
 *.o
 initfs/*.elf
+initfs.tar
+initramfs.c

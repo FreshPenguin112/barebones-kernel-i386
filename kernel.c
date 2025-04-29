@@ -307,8 +307,8 @@ void (*elf_exit_callback)(void) = 0;
 
 extern void syscall_handler_asm();
 
-void syscall_handler(int syscall_number, void* arg1, void* arg2) {
-    syscall_dispatcher(syscall_number, arg1, arg2);
+void syscall_handler(int syscall_number, void* arg1, void* arg2, void* arg3) {
+    syscall_dispatcher(syscall_number, arg1, arg2, arg3);
 }
 
 // Set up the syscall interrupt (int 0x80)
