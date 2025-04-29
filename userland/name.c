@@ -6,6 +6,6 @@ void _start(void) {
     syscall(SYSCALL_READLINE, name, sizeof(name));
     syscall(SYSCALL_ANSI_PRINT, "Hello, ", "green", "none");
     syscall(SYSCALL_ANSI_PRINT, name, "cyan", "none");
-    syscall(SYSCALL_PRINT, "!\n");
+    syscall(SYSCALL_ANSI_PRINT, "!\n", "cyan", "none");
     return;
 }

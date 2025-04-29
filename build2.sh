@@ -5,3 +5,4 @@ tar -cf initfs.tar -C initfs .
 xxd -i initfs.tar > initramfs.c
 #sleep 2
 docker run --mount type=bind,source=$(realpath .),target=/root -w /root kevincharm/i686-elf-gcc-toolchain:5.5.0 bash -c "sh build.sh"
+docker run --mount type=bind,source=$(realpath .),target=/root -w /root kevincharm/i686-elf-gcc-toolchain:5.5.0 bash -c "i686-elf-strip --strip-all initfs/*.elf mykernel.elf"
