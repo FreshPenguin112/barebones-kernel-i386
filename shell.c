@@ -2,6 +2,7 @@
 #include "string_utils.h"
 #include "serial.h"
 #include "qemu_utils.h"
+#include "tarfs.h"
 
 extern void kernel_print(const char* str);
 extern void kernel_putc(char c);
@@ -184,10 +185,39 @@ void shell_run(void) {
 
         // Parse and execute command
         int argc = parse_input(input_buffer);
+
+        // Handle redirection
+        int redirect = 0;
+        char* out_file = 0;
+        for (int i = 0; i < argc; i++) {
+            if (strcmp(argv[i], ">") == 0 && i + 1 < argc) {
+                redirect = 1;
+                out_file = argv[i + 1];
+                argv[i] = 0; // Truncate argv for command
+                argc = i;
+                break;
+            }
+        }
+
         if (argc > 0) {
             command_t* cmd = find_command(argv[0]);
             if (cmd) {
-                cmd->func(argc, argv);
+                // If redirect, capture output (simple: only for echo)
+                if (redirect && strcmp(argv[0], "echo") == 0) {
+                    // Concatenate args
+                    char buf[256];
+                    int pos = 0;
+                    for (int i = 1; i < argc && pos < 255; i++) {
+                        for (int j = 0; argv[i][j] && pos < 255; j++)
+                            buf[pos++] = argv[i][j];
+                        if (i < argc - 1 && pos < 255)
+                            buf[pos++] = ' ';
+                    }
+                    buf[pos] = 0;
+                    tarfs_write(out_file, buf, pos);
+                } else {
+                    cmd->func(argc, argv);
+                }
             } else {
                 kernel_print("Unknown command: ");
                 kernel_print(argv[0]);

@@ -1,7 +1,11 @@
 {
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
+        "*.fpl": "lua",
         "stdio.h": "c",
-        "string_utils.h": "c"
+        "string_utils.h": "c",
+        "syscall.h": "c",
+        "_string_utils.h": "c",
+        "io.h": "c"
     }
 }

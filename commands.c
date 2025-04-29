@@ -1,5 +1,7 @@
 #include "shell.h"
 #include "string_utils.h"
+#include "tarfs.h"
+#include "elf.h"
 
 extern void kernel_print(const char* str);
 extern void kernel_putc(char c);
@@ -228,12 +230,61 @@ void cmd_clear(int argc, char **argv) {
     ansi_clearhome();
 }
 
+void cmd_ls(int argc, char** argv) {
+    const char** names;
+    int n = tarfs_ls(&names);
+    for (int i = 0; i < n; i++) {
+        // Skip "./"
+        if (strcmp(names[i], "./") == 0) continue;
+        // Strip leading "./" if present
+        const char* display = names[i];
+        if (display[0] == '.' && display[1] == '/' )
+            display += 2;
+        kernel_print(display);
+        kernel_print("\n");
+    }
+}
+
+void cmd_cat(int argc, char** argv) {
+    if (argc < 2) {
+        kernel_print("Usage: cat <file>\n");
+        return;
+    }
+    unsigned int sz;
+    const char* data = tarfs_cat(argv[1], &sz);
+    if (!data) {
+        kernel_print("No such file\n");
+        return;
+    }
+    for (unsigned int i = 0; i < sz; i++)
+        kernel_putc(data[i]);
+    kernel_print("\n");
+}
+
 void cmd_help(int argc, char** argv) {
     kernel_print("Available commands:\n");
     kernel_print("  echo [text] - Print text to screen\n");
     kernel_print("  help       - Show this help message\n");
     kernel_print("  bc <expr>  - Calculate math expression\n");
     kernel_print("  clear      - Clear the screen\n"); // Add this line
+    kernel_print("  ls         - List files\n");
+    kernel_print("  cat <file> - Display file contents\n");
+    kernel_print("  run <file.elf> - Run ELF executable\n");
+}
+
+void cmd_run(int argc, char** argv) {
+    if (argc < 2) {
+        kernel_print("Usage: run <file.elf>\n");
+        return;
+    }
+    int res = elf_run(argv[1]);
+    if (res == -1)
+        kernel_print("File not found\n");
+    else if (res == -2)
+        kernel_print("Not an ELF file\n");
+    else if (res == -3)
+        kernel_print("Unsupported ELF\n");
+    // else: program ran and returned
 }
 
 // Command table
@@ -242,5 +293,8 @@ command_t commands[] = {
     {"help", cmd_help, "Show help message"},
     {"bc",   cmd_bc,   "Calculate math expression"},
     {"clear", cmd_clear, "Clear the screen"}, // Add this line
+    {"ls", cmd_ls, "List files"},
+    {"cat", cmd_cat, "Display file contents"},
+    {"run", cmd_run, "Run ELF executable"},
     {0, 0, 0} // Null terminator
 };

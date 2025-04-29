@@ -3,6 +3,12 @@
 #include "shell.h" // Change to use quotes instead of angle brackets
 #include "serial.h"
 #include "qemu_utils.h"
+#include "tarfs.h"
+#include "syscall.h"
+#include "idt.h"
+#include "string_utils.h"
+#include "pit.h"
+#include "io.h"
 
 // -----------------------------------------------------------------------------
 // VGA text‐mode state
@@ -15,19 +21,9 @@ int term_col = 0;
 int term_row = 0;
 uint8_t term_color = 0x0F; // white on black
 
-// -----------------------------------------------------------------------------
-// I/O port helpers
-// -----------------------------------------------------------------------------
-static inline void outb(uint16_t port, uint8_t val)
-{
-    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
-}
-static inline uint8_t inb(uint16_t port)
-{
-    uint8_t ret;
-    asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
+volatile int user_program_exited = 0;
+volatile uint32_t timer_ticks = 0;
+
 
 // -----------------------------------------------------------------------------
 // Serial (COM1) setup
@@ -200,19 +196,6 @@ void kernel_print(const char *s)
 }
 
 // -----------------------------------------------------------------------------
-// Minimal strcmp (no libc)
-// -----------------------------------------------------------------------------
-static int strcmp(const char *a, const char *b)
-{
-    while (*a && *a == *b)
-    {
-        a++;
-        b++;
-    }
-    return *(unsigned char *)a - *(unsigned char *)b;
-}
-
-// -----------------------------------------------------------------------------
 // Map human names → ANSI codes
 // -----------------------------------------------------------------------------
 static int ansi_fg_code(const char *c)
@@ -318,23 +301,55 @@ void ansi_clearhome(void)
 }
 
 // -----------------------------------------------------------------------------
+// Syscall handler
+// -----------------------------------------------------------------------------
+void (*elf_exit_callback)(void) = 0;
+
+extern void syscall_handler_asm();
+
+void syscall_handler(int syscall_number, void* arg1, void* arg2) {
+    syscall_dispatcher(syscall_number, arg1, arg2);
+}
+
+// Set up the syscall interrupt (int 0x80)
+void setup_syscalls() {
+    idt_set_gate(0x80, (uint32_t)syscall_handler_asm, 0x08, 0x8E);
+}
+
+// -----------------------------------------------------------------------------
+// Timer handler
+// -----------------------------------------------------------------------------
+extern void timer_handler_asm(void);
+
+void timer_handler(void) {
+    timer_ticks++;
+    kernel_print("."); // Debug: print a dot every tick
+    outb(0x20, 0x20);
+}
+
+// -----------------------------------------------------------------------------
 // Kernel entry point
 // -----------------------------------------------------------------------------
-void kernel_main(void)
-{
+void kernel_main(void) {
     serial_init();
     term_init();
-
-    // Clear & home
     ansi_clearhome();
 
-    // Initialize and run shell
+    idt_init();         // 1. Set up IDT
+    pit_init(1000);     // 2. Set up PIT
+    idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E); // 3. IRQ0
+    setup_syscalls();   // 4. Syscalls
+
+    //asm volatile("sti"); // 5. Enable interrupts
+
+    // 6. Everything is ready, start shell
+    extern unsigned char initfs_tar[];
+    tarfs_init((const char*)initfs_tar);
+
     shell_init();
     shell_run();
 
-    // Halt the CPU
-    for (;;)
-    {
+    for (;;) {
         asm volatile("hlt");
     }
 }
