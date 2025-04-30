@@ -323,7 +323,7 @@ extern void timer_handler_asm(void);
 
 void timer_handler(void) {
     timer_ticks++;
-    kernel_print("."); // Debug: print a dot every tick
+    //kernel_print("."); // Debug: print a dot every tick
     outb(0x20, 0x20);
 }
 
@@ -340,7 +340,7 @@ void kernel_main(void) {
     idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E); // 3. IRQ0
     setup_syscalls();   // 4. Syscalls
 
-    //asm volatile("sti"); // 5. Enable interrupts
+    asm volatile("sti"); // 5. Enable interrupts
 
     // 6. Everything is ready, start shell
     extern unsigned char initfs_tar[];
