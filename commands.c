@@ -3,11 +3,11 @@
 #include "tarfs.h"
 #include "elf.h"
 
-extern void kernel_print(const char* str);
+extern void kernel_print(const char *str);
 extern void kernel_putc(char c);
 extern void ansi_clearhome(void); // Add this line
 
-#define FP_SCALE 100  // 2 decimal places
+#define FP_SCALE 100 // 2 decimal places
 
 // Forward declarations
 static int bc_expr(const char **s);
@@ -17,59 +17,78 @@ static int bc_number(const char **s);
 static int bc_pow(const char **s);
 
 // Helper: skip whitespace
-static void bc_skipws(const char **s) {
-    while (**s == ' ' || **s == '\t') (*s)++;
+static void bc_skipws(const char **s)
+{
+    while (**s == ' ' || **s == '\t')
+        (*s)++;
 }
 
 // Parse a fixed-point number (e.g., "12.34" -> 1234)
-static int bc_number(const char **s) {
+static int bc_number(const char **s)
+{
     bc_skipws(s);
     int sign = 1, val = 0, frac = 0, frac_div = FP_SCALE;
-    if (**s == '-') { sign = -1; (*s)++; }
-    while (**s >= '0' && **s <= '9') {
+    if (**s == '-')
+    {
+        sign = -1;
+        (*s)++;
+    }
+    while (**s >= '0' && **s <= '9')
+    {
         val = val * 10 + (**s - '0');
         (*s)++;
     }
     val *= FP_SCALE;
-    if (**s == '.') {
+    if (**s == '.')
+    {
         (*s)++;
         int digits = 0;
-        while (**s >= '0' && **s <= '9' && digits < 2) { // 2 decimal places
+        while (**s >= '0' && **s <= '9' && digits < 2)
+        { // 2 decimal places
             frac = frac * 10 + (**s - '0');
             (*s)++;
             digits++;
         }
-        if (digits == 1) frac *= 10; // e.g., "1.2" -> "1.20"
+        if (digits == 1)
+            frac *= 10; // e.g., "1.2" -> "1.20"
         val += frac;
     }
     return sign * val;
 }
 
 // Parse factor: number or parenthesis or exponentiation
-static int bc_factor(const char **s) {
+static int bc_factor(const char **s)
+{
     bc_skipws(s);
     int val;
-    if (**s == '(') {
+    if (**s == '(')
+    {
         (*s)++;
         val = bc_expr(s);
         bc_skipws(s);
-        if (**s == ')') (*s)++;
+        if (**s == ')')
+            (*s)++;
         return val;
-    } else {
+    }
+    else
+    {
         return bc_number(s);
     }
 }
 
 // Parse exponentiation (right-associative)
-static int bc_pow(const char **s) {
+static int bc_pow(const char **s)
+{
     int base = bc_factor(s);
     bc_skipws(s);
-    while (**s == '^') {
+    while (**s == '^')
+    {
         (*s)++;
         int exp = bc_pow(s); // right-associative
         // Integer exponentiation for fixed-point
         int result = FP_SCALE;
-        for (int i = 0; i < exp / FP_SCALE; i++) result = (result * base) / FP_SCALE;
+        for (int i = 0; i < exp / FP_SCALE; i++)
+            result = (result * base) / FP_SCALE;
         base = result;
         bc_skipws(s);
     }
@@ -77,59 +96,78 @@ static int bc_pow(const char **s) {
 }
 
 // Parse term: multiplication/division
-static int bc_term(const char **s) {
+static int bc_term(const char **s)
+{
     int val = bc_pow(s);
     bc_skipws(s);
-    while (**s == '*' || **s == '/') {
+    while (**s == '*' || **s == '/')
+    {
         char op = **s;
         (*s)++;
         int rhs = bc_pow(s);
-        if (op == '*') val = (val * rhs) / FP_SCALE;
-        else if (op == '/') val = (val * FP_SCALE) / rhs;
+        if (op == '*')
+            val = (val * rhs) / FP_SCALE;
+        else if (op == '/')
+            val = (val * FP_SCALE) / rhs;
         bc_skipws(s);
     }
     return val;
 }
 
 // Parse expression: addition/subtraction
-static int bc_expr(const char **s) {
+static int bc_expr(const char **s)
+{
     int val = bc_term(s);
     bc_skipws(s);
-    while (**s == '+' || **s == '-') {
+    while (**s == '+' || **s == '-')
+    {
         char op = **s;
         (*s)++;
         int rhs = bc_term(s);
-        if (op == '+') val += rhs;
-        else if (op == '-') val -= rhs;
+        if (op == '+')
+            val += rhs;
+        else if (op == '-')
+            val -= rhs;
         bc_skipws(s);
     }
     return val;
 }
 
 // Fixed-point to string (e.g., 1234 -> "12.34", 1200 -> "12", 1250 -> "12.5")
-static void bc_ftoa(int n, char *buf) {
+static void bc_ftoa(int n, char *buf)
+{
     int neg = 0;
-    if (n < 0) { neg = 1; n = -n; }
+    if (n < 0)
+    {
+        neg = 1;
+        n = -n;
+    }
     int intpart = n / FP_SCALE;
     int fracpart = n % FP_SCALE;
     // Integer part
     int i = 0;
-    if (neg) buf[i++] = '-';
+    if (neg)
+        buf[i++] = '-';
     // Convert intpart to string
     char tmp[12];
     int j = 0;
-    if (intpart == 0) tmp[j++] = '0';
-    else {
+    if (intpart == 0)
+        tmp[j++] = '0';
+    else
+    {
         int x = intpart;
-        while (x > 0) {
+        while (x > 0)
+        {
             tmp[j++] = '0' + (x % 10);
             x /= 10;
         }
     }
     // Reverse intpart
-    for (int k = j - 1; k >= 0; k--) buf[i++] = tmp[k];
+    for (int k = j - 1; k >= 0; k--)
+        buf[i++] = tmp[k];
 
-    if (fracpart == 0) {
+    if (fracpart == 0)
+    {
         buf[i] = 0;
         return;
     }
@@ -138,33 +176,41 @@ static void bc_ftoa(int n, char *buf) {
     // Always 2 digits for fracpart, but trim trailing zeros
     int d1 = fracpart / 10;
     int d2 = fracpart % 10;
-    if (d2 == 0) {
+    if (d2 == 0)
+    {
         buf[i++] = '0' + d1;
-    } else {
+    }
+    else
+    {
         buf[i++] = '0' + d1;
         buf[i++] = '0' + d2;
     }
     buf[i] = 0;
 
     // Remove trailing zeros after decimal point
-    if (buf[i-1] == '0' && buf[i-2] != '.') {
-        buf[i-1] = 0;
+    if (buf[i - 1] == '0' && buf[i - 2] != '.')
+    {
+        buf[i - 1] = 0;
     }
-    if (buf[i-1] == '.' ) {
-        buf[i-1] = 0;
+    if (buf[i - 1] == '.')
+    {
+        buf[i - 1] = 0;
     }
 }
 
 // bc command: bc <expr>
-void cmd_bc(int argc, char **argv) {
-    if (argc < 2) {
+void cmd_bc(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         kernel_print("Usage: bc <expr>\n");
         return;
     }
     // Reconstruct the expression from argv[1..]
     char expr[128];
     int pos = 0;
-    for (int i = 1; i < argc && pos < 127; i++) {
+    for (int i = 1; i < argc && pos < 127; i++)
+    {
         for (int j = 0; argv[i][j] && pos < 127; j++)
             expr[pos++] = argv[i][j];
         if (i < argc - 1 && pos < 127)
@@ -181,78 +227,105 @@ void cmd_bc(int argc, char **argv) {
     kernel_print("\n");
 }
 
-void cmd_echo(int argc, char** argv) {
+void cmd_echo(int argc, char **argv)
+{
     int interpret_escapes = 0;
     int start = 1;
 
     // Check for -e flag
-    if (argc > 1 && strcmp(argv[1], "-e") == 0) {
+    if (argc > 1 && strcmp(argv[1], "-e") == 0)
+    {
         interpret_escapes = 1;
         start = 2;
     }
 
-    for (int i = start; i < argc; i++) {
-        const char* s = argv[i];
-        if (interpret_escapes) {
+    for (int i = start; i < argc; i++)
+    {
+        const char *s = argv[i];
+        if (interpret_escapes)
+        {
             // Print with escape interpretation
-            for (int j = 0; s[j]; j++) {
-                if (s[j] == '\\' && s[j+1]) {
-                    if (s[j+1] == 'e') {
+            for (int j = 0; s[j]; j++)
+            {
+                if (s[j] == '\\' && s[j + 1])
+                {
+                    if (s[j + 1] == 'e')
+                    {
                         kernel_putc('\033');
                         j++;
-                    } else if (s[j+1] == 'n') {
+                    }
+                    else if (s[j + 1] == 'n')
+                    {
                         kernel_putc('\n');
                         j++;
-                    } else if (s[j+1] == 't') {
+                    }
+                    else if (s[j + 1] == 't')
+                    {
                         kernel_putc('\t');
                         j++;
-                    } else if (s[j+1] == '\\') {
+                    }
+                    else if (s[j + 1] == '\\')
+                    {
                         kernel_putc('\\');
                         j++;
-                    } else {
+                    }
+                    else
+                    {
                         kernel_putc(s[j]);
                     }
-                } else {
+                }
+                else
+                {
                     kernel_putc(s[j]);
                 }
             }
-        } else {
+        }
+        else
+        {
             kernel_print(s);
         }
-        if (i < argc - 1) {
+        if (i < argc - 1)
+        {
             kernel_print(" ");
         }
     }
     kernel_print("\n");
 }
 
-void cmd_clear(int argc, char **argv) {
+void cmd_clear(int argc, char **argv)
+{
     ansi_clearhome();
 }
 
-void cmd_ls(int argc, char** argv) {
-    const char** names;
+void cmd_ls(int argc, char **argv)
+{
+    const char **names;
     int n = tarfs_ls(&names);
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
+    {
         // Skip "./"
-        if (strcmp(names[i], "./") == 0) continue;
+        if (strcmp(names[i], "./") == 0)
+            continue;
         // Strip leading "./" if present
-        const char* display = names[i];
-        if (display[0] == '.' && display[1] == '/' )
+        const char *display = names[i];
+        if (display[0] == '.' && display[1] == '/')
             display += 2;
         kernel_print(display);
         kernel_print("\n");
     }
 }
 
-void cmd_cat(int argc, char** argv) {
-    if (argc < 2) {
+void cmd_cat(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         kernel_print("Usage: cat <file>\n");
         return;
     }
     unsigned int sz;
-    const char* data = tarfs_cat(argv[1], &sz);
-    if (!data) {
+    const char *data = tarfs_cat(argv[1], &sz);
+    if (!data)
+    {
         kernel_print("No such file\n");
         return;
     }
@@ -261,7 +334,8 @@ void cmd_cat(int argc, char** argv) {
     kernel_print("\n");
 }
 
-void cmd_help(int argc, char** argv) {
+void cmd_help(int argc, char **argv)
+{
     kernel_print("Available commands:\n");
     kernel_print("  echo [text] - Print text to screen\n");
     kernel_print("  help       - Show this help message\n");
@@ -272,8 +346,10 @@ void cmd_help(int argc, char** argv) {
     kernel_print("  run <file.elf> - Run ELF executable\n");
 }
 
-void cmd_run(int argc, char** argv) {
-    if (argc < 2) {
+void cmd_run(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         kernel_print("Usage: run <file.elf>\n");
         return;
     }
@@ -291,7 +367,7 @@ void cmd_run(int argc, char** argv) {
 command_t commands[] = {
     {"echo", cmd_echo, "Print text to screen"},
     {"help", cmd_help, "Show help message"},
-    {"bc",   cmd_bc,   "Calculate math expression"},
+    {"bc", cmd_bc, "Calculate math expression"},
     {"clear", cmd_clear, "Clear the screen"}, // Add this line
     {"ls", cmd_ls, "List files"},
     {"cat", cmd_cat, "Display file contents"},

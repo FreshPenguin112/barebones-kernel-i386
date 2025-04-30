@@ -3,9 +3,10 @@
 
 #define PIT_FREQ 1193182
 #define PIT_CHAN0 0x40
-#define PIT_CMD  0x43
+#define PIT_CMD 0x43
 
-void pit_init(uint32_t freq) {
+void pit_init(uint32_t freq)
+{
     outb(0x20, 0x11);
     outb(0xA0, 0x11);
     outb(0x21, 0x20); // Master PIC vector offset

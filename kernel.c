@@ -24,7 +24,6 @@ uint8_t term_color = 0x0F; // white on black
 volatile int user_program_exited = 0;
 volatile uint32_t timer_ticks = 0;
 
-
 // -----------------------------------------------------------------------------
 // Serial (COM1) setup
 // -----------------------------------------------------------------------------
@@ -307,12 +306,14 @@ void (*elf_exit_callback)(void) = 0;
 
 extern void syscall_handler_asm();
 
-void syscall_handler(int syscall_number, void* arg1, void* arg2, void* arg3) {
+void syscall_handler(int syscall_number, void *arg1, void *arg2, void *arg3)
+{
     syscall_dispatcher(syscall_number, arg1, arg2, arg3);
 }
 
 // Set up the syscall interrupt (int 0x80)
-void setup_syscalls() {
+void setup_syscalls()
+{
     idt_set_gate(0x80, (uint32_t)syscall_handler_asm, 0x08, 0x8E);
 }
 
@@ -321,35 +322,38 @@ void setup_syscalls() {
 // -----------------------------------------------------------------------------
 extern void timer_handler_asm(void);
 
-void timer_handler(void) {
+void timer_handler(void)
+{
     timer_ticks++;
-    //kernel_print("."); // Debug: print a dot every tick
+    // kernel_print("."); // Debug: print a dot every tick
     outb(0x20, 0x20);
 }
 
 // -----------------------------------------------------------------------------
 // Kernel entry point
 // -----------------------------------------------------------------------------
-void kernel_main(void) {
+void kernel_main(void)
+{
     serial_init();
     term_init();
     ansi_clearhome();
 
-    idt_init();         // 1. Set up IDT
-    pit_init(1000);     // 2. Set up PIT
+    idt_init();                                                // 1. Set up IDT
+    pit_init(1000);                                            // 2. Set up PIT
     idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E); // 3. IRQ0
-    setup_syscalls();   // 4. Syscalls
+    setup_syscalls();                                          // 4. Syscalls
 
     asm volatile("sti"); // 5. Enable interrupts
 
     // 6. Everything is ready, start shell
     extern unsigned char initfs_tar[];
-    tarfs_init((const char*)initfs_tar);
+    tarfs_init((const char *)initfs_tar);
 
     shell_init();
     shell_run();
 
-    for (;;) {
+    for (;;)
+    {
         asm volatile("hlt");
     }
 }

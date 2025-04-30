@@ -10,10 +10,11 @@
 typedef void (*cmd_function)(int argc, char **argv);
 
 // Command structure
-typedef struct {
-    const char* name;
+typedef struct
+{
+    const char *name;
     cmd_function func;
-    const char* help;
+    const char *help;
 } command_t;
 
 // Function declarations

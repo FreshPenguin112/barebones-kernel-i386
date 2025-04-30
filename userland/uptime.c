@@ -1,8 +1,9 @@
 #include "../syscall.h"
 #include "../string_utils.h"
 
-void _start(void) {
-    //syscall(SYSCALL_PRINT, "this one is broken lol\n");
+void _start(void)
+{
+    // syscall(SYSCALL_PRINT, "this one is broken lol\n");
     uint32_t ms;
     syscall(SYSCALL_UPTIME_MS, &ms);
     uint32_t seconds = ms / 1000; // Convert ms to seconds

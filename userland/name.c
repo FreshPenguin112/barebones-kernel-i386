@@ -1,6 +1,7 @@
 #include "../syscall.h"
 
-void _start(void) {
+void _start(void)
+{
     char name[100];
     syscall(SYSCALL_PRINT, "Whats your name? $ ");
     syscall(SYSCALL_READLINE, name, sizeof(name));

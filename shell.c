@@ -4,7 +4,7 @@
 #include "qemu_utils.h"
 #include "tarfs.h"
 
-extern void kernel_print(const char* str);
+extern void kernel_print(const char *str);
 extern void kernel_putc(char c);
 extern command_t commands[];
 extern void qemu_halt_exit(int code);
@@ -12,21 +12,22 @@ extern void qemu_halt_exit(int code);
 #define HISTORY_SIZE 100
 
 static char input_buffer[MAX_INPUT_LENGTH];
-static char* argv[MAX_ARGS];
+static char *argv[MAX_ARGS];
 static char arg_buffer[MAX_ARGS][MAX_ARG_LENGTH];
 
 // Command history
 static char history[HISTORY_SIZE][MAX_INPUT_LENGTH];
-static int history_count = 0;      // Number of entries in history
-static int history_pos = 0;        // Current position for new command
-static int history_view = -1;      // -1 = not viewing history
+static int history_count = 0; // Number of entries in history
+static int history_pos = 0;   // Current position for new command
+static int history_view = -1; // -1 = not viewing history
 
 // Cursor position in input_buffer
 static int cursor_pos = 0;
 static int input_len = 0;
 
 // Helper: redraw the current input line
-static void redraw_input(void) {
+static void redraw_input(void)
+{
     // Move cursor to start of line
     kernel_print("\rice $ ");
     // Print input buffer
@@ -41,9 +42,11 @@ static void redraw_input(void) {
 }
 
 // Helper: set input buffer to a string and redraw
-static void set_input(const char* str) {
+static void set_input(const char *str)
+{
     int len = 0;
-    while (str[len] && len < MAX_INPUT_LENGTH - 1) {
+    while (str[len] && len < MAX_INPUT_LENGTH - 1)
+    {
         input_buffer[len] = str[len];
         len++;
     }
@@ -54,10 +57,12 @@ static void set_input(const char* str) {
 }
 
 // Parse input into arguments
-static int parse_input(char* input) {
+static int parse_input(char *input)
+{
     int argc = 0;
-    char* token = strtok(input, ' ');
-    while (token && argc < MAX_ARGS) {
+    char *token = strtok(input, ' ');
+    while (token && argc < MAX_ARGS)
+    {
         strcpy(arg_buffer[argc], token);
         argv[argc] = arg_buffer[argc];
         argc++;
@@ -67,71 +72,96 @@ static int parse_input(char* input) {
 }
 
 // Find command in command table
-static command_t* find_command(const char* name) {
-    for (command_t* cmd = commands; cmd->name; cmd++) {
-        if (strcmp(cmd->name, name) == 0) {
+static command_t *find_command(const char *name)
+{
+    for (command_t *cmd = commands; cmd->name; cmd++)
+    {
+        if (strcmp(cmd->name, name) == 0)
+        {
             return cmd;
         }
     }
     return 0;
 }
 
-void shell_init(void) {
+void shell_init(void)
+{
     kernel_print("Arctic Shell\n");
 }
 
-void shell_run(void) {
-    while (1) {
+void shell_run(void)
+{
+    while (1)
+    {
         kernel_print("ice $ ");
         input_len = 0;
         cursor_pos = 0;
         input_buffer[0] = 0;
         history_view = -1;
 
-        while (1) {
-            if (serial_has_received()) {
+        while (1)
+        {
+            if (serial_has_received())
+            {
                 char c = serial_read_char();
 
                 // Handle Ctrl+D (ASCII 4)
-                if (c == 4) {
+                if (c == 4)
+                {
                     qemu_halt_exit(0);
                 }
 
                 // Handle escape sequences (arrow keys)
-                if (c == '\033') {
+                if (c == '\033')
+                {
                     // Expect '[' next
-                    if (serial_has_received() && serial_read_char() == '[') {
+                    if (serial_has_received() && serial_read_char() == '[')
+                    {
                         char dir = 0;
                         if (serial_has_received())
                             dir = serial_read_char();
-                        if (dir == 'A') { // Up arrow
+                        if (dir == 'A')
+                        { // Up arrow
                             // Show previous command in history
-                            if (history_count > 0) {
+                            if (history_count > 0)
+                            {
                                 if (history_view == -1)
                                     history_view = history_count - 1;
                                 else if (history_view > 0)
                                     history_view--;
                                 set_input(history[history_view]);
                             }
-                        } else if (dir == 'B') { // Down arrow
+                        }
+                        else if (dir == 'B')
+                        { // Down arrow
                             // Show next command in history
-                            if (history_count > 0 && history_view != -1) {
-                                if (history_view < history_count - 1) {
+                            if (history_count > 0 && history_view != -1)
+                            {
+                                if (history_view < history_count - 1)
+                                {
                                     history_view++;
                                     set_input(history[history_view]);
-                                } else {
+                                }
+                                else
+                                {
                                     // Blank line after last history
                                     history_view = -1;
                                     set_input("");
                                 }
                             }
-                        } else if (dir == 'C') { // Right arrow
-                            if (cursor_pos < input_len) {
+                        }
+                        else if (dir == 'C')
+                        { // Right arrow
+                            if (cursor_pos < input_len)
+                            {
                                 kernel_print("\033[C");
                                 cursor_pos++;
                             }
-                        } else if (dir == 'D') { // Left arrow
-                            if (cursor_pos > 0) {
+                        }
+                        else if (dir == 'D')
+                        { // Left arrow
+                            if (cursor_pos > 0)
+                            {
                                 kernel_print("\033[D");
                                 cursor_pos--;
                             }
@@ -141,8 +171,10 @@ void shell_run(void) {
                 }
 
                 // Handle backspace (ASCII 8 or 127)
-                if (c == 8 || c == 127) {
-                    if (cursor_pos > 0 && input_len > 0) {
+                if (c == 8 || c == 127)
+                {
+                    if (cursor_pos > 0 && input_len > 0)
+                    {
                         // Shift chars left from cursor
                         for (int j = cursor_pos - 1; j < input_len - 1; j++)
                             input_buffer[j] = input_buffer[j + 1];
@@ -155,14 +187,16 @@ void shell_run(void) {
                 }
 
                 // Handle enter
-                if (c == '\n' || c == '\r') {
+                if (c == '\n' || c == '\r')
+                {
                     kernel_print("\n");
                     input_buffer[input_len] = 0;
                     break;
                 }
 
                 // Printable character
-                if (c >= 32 && c <= 126 && input_len < MAX_INPUT_LENGTH - 1) {
+                if (c >= 32 && c <= 126 && input_len < MAX_INPUT_LENGTH - 1)
+                {
                     // Insert at cursor position
                     for (int j = input_len; j > cursor_pos; j--)
                         input_buffer[j] = input_buffer[j - 1];
@@ -176,7 +210,8 @@ void shell_run(void) {
         }
 
         // Add to history if not empty and not duplicate of last
-        if (input_len > 0 && (history_count == 0 || strcmp(input_buffer, history[(history_count - 1) % HISTORY_SIZE]) != 0)) {
+        if (input_len > 0 && (history_count == 0 || strcmp(input_buffer, history[(history_count - 1) % HISTORY_SIZE]) != 0))
+        {
             strcpy(history[history_count % HISTORY_SIZE], input_buffer);
             history_count++;
             if (history_count > HISTORY_SIZE)
@@ -188,9 +223,11 @@ void shell_run(void) {
 
         // Handle redirection
         int redirect = 0;
-        char* out_file = 0;
-        for (int i = 0; i < argc; i++) {
-            if (strcmp(argv[i], ">") == 0 && i + 1 < argc) {
+        char *out_file = 0;
+        for (int i = 0; i < argc; i++)
+        {
+            if (strcmp(argv[i], ">") == 0 && i + 1 < argc)
+            {
                 redirect = 1;
                 out_file = argv[i + 1];
                 argv[i] = 0; // Truncate argv for command
@@ -199,15 +236,19 @@ void shell_run(void) {
             }
         }
 
-        if (argc > 0) {
-            command_t* cmd = find_command(argv[0]);
-            if (cmd) {
+        if (argc > 0)
+        {
+            command_t *cmd = find_command(argv[0]);
+            if (cmd)
+            {
                 // If redirect, capture output (simple: only for echo)
-                if (redirect && strcmp(argv[0], "echo") == 0) {
+                if (redirect && strcmp(argv[0], "echo") == 0)
+                {
                     // Concatenate args
                     char buf[256];
                     int pos = 0;
-                    for (int i = 1; i < argc && pos < 255; i++) {
+                    for (int i = 1; i < argc && pos < 255; i++)
+                    {
                         for (int j = 0; argv[i][j] && pos < 255; j++)
                             buf[pos++] = argv[i][j];
                         if (i < argc - 1 && pos < 255)
@@ -215,10 +256,14 @@ void shell_run(void) {
                     }
                     buf[pos] = 0;
                     tarfs_write(out_file, buf, pos);
-                } else {
+                }
+                else
+                {
                     cmd->func(argc, argv);
                 }
-            } else {
+            }
+            else
+            {
                 kernel_print("Unknown command: ");
                 kernel_print(argv[0]);
                 kernel_print("\n");
