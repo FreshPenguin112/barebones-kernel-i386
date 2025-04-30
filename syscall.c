@@ -33,7 +33,7 @@ static void syscall_getchar(void* arg1, void* arg2, void* arg3) {
     }
 }
 
-static void syscall_time_ms(void* arg1, void* arg2, void* arg3) {
+static void syscall_uptime_ms(void* arg1, void* arg2, void* arg3) {
     if (arg1) {
         *(uint32_t*)arg1 = timer_ticks; // or convert to ms if needed
     }
@@ -93,7 +93,7 @@ static syscall_handler_t syscall_table[] = {
     syscall_print,      // 0
     syscall_exit,       // 1
     syscall_getchar,    // 2
-    syscall_time_ms,    // 3
+    syscall_uptime_ms,    // 3
     syscall_random,     // 4
     syscall_putchar,    // 5
     syscall_readline,   // 6

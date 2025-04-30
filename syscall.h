@@ -8,7 +8,7 @@
 #define SYSCALL_PRINT      0
 #define SYSCALL_EXIT       1
 #define SYSCALL_GETCHAR    2
-#define SYSCALL_TIME_MS    3
+#define SYSCALL_UPTIME_MS    3
 #define SYSCALL_RANDOM     4
 #define SYSCALL_PUTCHAR    5
 #define SYSCALL_READLINE   6
