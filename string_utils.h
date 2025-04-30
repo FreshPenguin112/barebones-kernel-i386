@@ -9,5 +9,8 @@ int strcmp(const char *s1, const char *s2);
 void strcpy(char *dest, const char *src);
 char *strtok(char *str, const char delimiter);
 void itoa(int value, char *str, int base);
+void ftoa(float value, char *str, int precision);
+int atoi(const char *str);
+float atof(const char *str);
 
 #endif

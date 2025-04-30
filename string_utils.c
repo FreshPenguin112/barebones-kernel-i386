@@ -90,3 +90,122 @@ void itoa(int value, char *str, int base)
         *ptr1++ = tmp_char;
     }
 }
+
+void ftoa(float value, char *str, int precision)
+{
+    char *ptr = str;
+
+    // Handle negative numbers
+    if (value < 0)
+    {
+        *ptr++ = '-';
+        value = -value;
+    }
+
+    // Extract integer part
+    int int_part = (int)value;
+    value -= int_part;
+
+    // Convert integer part to string
+    itoa(int_part, ptr, 10);
+    while (*ptr != '\0') // Move pointer to the end of the integer part
+        ptr++;
+
+    // Add decimal point
+    *ptr++ = '.';
+
+    // Convert fractional part to string
+    for (int i = 0; i < precision; i++)
+    {
+        value *= 10;
+        int digit = (int)value;
+        *ptr++ = '0' + digit;
+        value -= digit;
+    }
+
+    // Null-terminate the string
+    *ptr = '\0';
+
+    // Remove trailing zeros
+    char *end = ptr - 1; // Start from the last character
+    while (end > str && *end == '0') // Remove zeros
+        end--;
+
+    if (*end == '.') // Remove the decimal point if it's the last character
+        end--;
+
+    *(end + 1) = '\0'; // Null-terminate the string
+}
+
+int atoi(const char *str)
+{
+    int result = 0;
+    int sign = 1;
+
+    // Skip leading whitespace
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')
+        str++;
+
+    // Handle optional sign
+    if (*str == '-')
+    {
+        sign = -1;
+        str++;
+    }
+    else if (*str == '+')
+    {
+        str++;
+    }
+
+    // Convert digits to integer
+    while (*str >= '0' && *str <= '9')
+    {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    return result * sign;
+}
+
+float atof(const char *str)
+{
+    float result = 0.0f;
+    float sign = 1.0f;
+    float divisor = 1.0f;
+
+    // Skip leading whitespace
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')
+        str++;
+
+    // Handle optional sign
+    if (*str == '-')
+    {
+        sign = -1.0f;
+        str++;
+    }
+    else if (*str == '+')
+    {
+        str++;
+    }
+
+    // Convert integer part
+    while (*str >= '0' && *str <= '9')
+    {
+        result = result * 10.0f + (*str - '0');
+        str++;
+    }
+
+    // Convert fractional part
+    if (*str == '.')
+    {
+        str++;
+        while (*str >= '0' && *str <= '9')
+        {
+            divisor *= 10.0f;
+            result += (*str - '0') / divisor;
+            str++;
+        }
+    }
+
+    return result * sign;
+}

@@ -7,6 +7,7 @@
         "syscall.h": "c",
         "_string_utils.h": "c",
         "io.h": "c",
-        "hhh": "c"
+        "hhh": "c",
+        "ctype.h": "c"
     }
 }
