@@ -2,6 +2,6 @@
 
 void _start(void)
 {
-    syscall(SYSCALL_PRINT, (void *)"Hello, world!\n");
+    syscall(SYSCALL_PRINT, "Hello, World!\n");
     return;
 }
