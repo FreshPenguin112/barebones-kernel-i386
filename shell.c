@@ -6,6 +6,7 @@
 
 extern void kernel_print(const char *str);
 extern void kernel_putc(char c);
+extern void kernel_print_ansi(int fg, int bg);
 extern command_t commands[];
 extern void qemu_halt_exit(int code);
 
@@ -29,7 +30,7 @@ static int input_len = 0;
 static void redraw_input(void)
 {
     // Move cursor to start of line
-    kernel_print("\rice $ ");
+    kernel_print_ansi("\rice $ ", "cyan", "none");
     // Print input buffer
     for (int i = 0; i < input_len; i++)
         kernel_putc(input_buffer[i]);
@@ -86,14 +87,14 @@ static command_t *find_command(const char *name)
 
 void shell_init(void)
 {
-    kernel_print("Arctic Shell\n");
+    kernel_print_ansi("Arctic Shell\n", "cyan", "none");
 }
 
 void shell_run(void)
 {
     while (1)
     {
-        kernel_print("ice $ ");
+        kernel_print_ansi("ice $ ", "cyan", "none");
         input_len = 0;
         cursor_pos = 0;
         input_buffer[0] = 0;
@@ -264,8 +265,8 @@ void shell_run(void)
             }
             else
             {
-                kernel_print("Unknown command: ");
-                kernel_print(argv[0]);
+                kernel_print_ansi("Unknown command: ", "red", "none");
+                kernel_print_ansi(argv[0], "red", "none");
                 kernel_print("\n");
             }
         }
