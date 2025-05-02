@@ -6,7 +6,9 @@
 
 extern void kernel_print(const char *str);
 extern void kernel_putc(char c);
-extern void kernel_print_ansi(int fg, int bg);
+extern void kernel_print_ansi(char *text, char *fg_name, char *bg_name);
+extern void kernel_putc_ansi(char text, char *fg_name, char *bg_name);
+
 extern command_t commands[];
 extern void qemu_halt_exit(int code);
 
@@ -33,7 +35,7 @@ static void redraw_input(void)
     kernel_print_ansi("\rice $ ", "cyan", "none");
     // Print input buffer
     for (int i = 0; i < input_len; i++)
-        kernel_putc(input_buffer[i]);
+        kernel_putc_ansi(input_buffer[i], "magenta", "none");
     // Clear to end of line (optional, for visual clarity)
     kernel_print("\033[K");
     // Move cursor to correct position

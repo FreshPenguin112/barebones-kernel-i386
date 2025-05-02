@@ -10,9 +10,6 @@ extern volatile uint32_t timer_ticks; // You need a timer interrupt to increment
 extern void kernel_putc(char c);
 extern void kernel_print_ansi(int fg, int bg);
 
-// Prototype for the kernel's ANSI formatter
-void kernel_print_ansi(int fg, int bg);
-
 typedef void (*syscall_handler_t)(void *arg1, void *arg2, void *arg3);
 
 // Syscall handlers

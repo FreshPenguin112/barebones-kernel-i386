@@ -4,6 +4,8 @@
 #include "elf.h"
 
 extern void kernel_print(const char *str);
+extern void kernel_print_ansi(const char *text, char *fg_name, char *bg_name);
+extern void kernel_putc_ansi(char text, char *fg_name, char *bg_name);
 extern void kernel_putc(char c);
 extern void ansi_clearhome(void);
 
@@ -128,7 +130,7 @@ void cmd_bc(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kernel_print("Usage: bc <expr>\n");
+        kernel_print_ansi("Usage: bc <expr>\n", "red", "none");
         return;
     }
 
@@ -149,7 +151,7 @@ void cmd_bc(int argc, char **argv)
 
     char buf[32];
     ftoa(result, buf, 6); // Convert result to string with 6 decimal places
-    kernel_print(buf);
+    kernel_print_ansi(buf, "green", "none");
     kernel_print("\n");
 }
 
@@ -208,7 +210,7 @@ void cmd_echo(int argc, char **argv)
         }
         else
         {
-            kernel_print(s);
+            kernel_print_ansi(s, "green", "none");
         }
         if (i < argc - 1)
         {
@@ -236,7 +238,7 @@ void cmd_ls(int argc, char **argv)
         const char *display = names[i];
         if (display[0] == '.' && display[1] == '/')
             display += 2;
-        kernel_print(display);
+        kernel_print_ansi(display, "green", "none");
         kernel_print("\n");
     }
 }
@@ -245,18 +247,18 @@ void cmd_cat(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kernel_print("Usage: cat <file>\n");
+        kernel_print_ansi("Usage: cat <file>\n", "red", "none");
         return;
     }
     unsigned int sz;
     const char *data = tarfs_cat(argv[1], &sz);
     if (!data)
     {
-        kernel_print("No such file\n");
+        kernel_print_ansi("No such file\n", "red", "none");
         return;
     }
     for (unsigned int i = 0; i < sz; i++)
-        kernel_putc(data[i]);
+        kernel_putc_ansi(data[i], "green", "none");
     kernel_print("\n");
 }
 
@@ -276,16 +278,16 @@ void cmd_run(int argc, char **argv)
 {
     if (argc < 2)
     {
-        kernel_print("Usage: run <file.elf>\n");
+        kernel_print_ansi("Usage: run <file.elf>\n", "red", "none");
         return;
     }
     int res = elf_run(argv[1]);
     if (res == -1)
-        kernel_print("File not found\n");
+        kernel_print_ansi("File not found\n", "red", "none");
     else if (res == -2)
-        kernel_print("Not an ELF file\n");
+        kernel_print_ansi("Not an ELF file\n", "red", "none");
     else if (res == -3)
-        kernel_print("Unsupported ELF\n");
+        kernel_print_ansi("Unsupported ELF\n", "red", "none");
     // else: program ran and returned
 }
 

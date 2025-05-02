@@ -280,6 +280,34 @@ void kernel_print_ansi(const char *text,
         kernel_handle_ansi_and_putc("0", 1);
 }
 
+void kernel_putc_ansi(const char text,
+                       const char *fg_name,
+                       const char *bg_name)
+{
+    char buf[2];
+    size_t len;
+    int fg = ansi_fg_code(fg_name);
+    int bg = ansi_bg_code(bg_name);
+
+    if (fg >= 0)
+    {
+        len = fmt_code(buf, fg);
+        kernel_handle_ansi_and_putc(buf, len);
+    }
+    if (bg >= 0)
+    {
+        len = fmt_code(buf, bg);
+        kernel_handle_ansi_and_putc(buf, len);
+    }
+
+    // now the text
+    kernel_putc(text);
+
+    // reset if we changed anything
+    if (fg >= 0 || bg >= 0)
+        kernel_handle_ansi_and_putc("0", 1);
+}
+
 // -----------------------------------------------------------------------------
 // ANSI screen/cursor controls
 // -----------------------------------------------------------------------------
