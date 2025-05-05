@@ -43,12 +43,52 @@ static void syscall_uptime_ms(void *arg1, void *arg2, void *arg3)
 }
 
 static uint32_t rand_seed = 123456789;
-static void syscall_random(void *arg1, void *arg2, void *arg3)
+
+/* Advance the LCG state once */
+static inline uint32_t lcg_next(void)
 {
-    // Simple LCG random number generator
+    // X_{n+1} = (1103515245 * X_n + 12345) mod 2^32
+    // Standard “glibc” constants :contentReference[oaicite:3]{index=3}
+    return (rand_seed = rand_seed * 1103515245u + 12345u);
+}
+
+static void syscall_random_u32(void *arg1, void *arg2, void *arg3) {
+    if (arg1) {
+        *(uint32_t *)arg1 = lcg_next();  // full 32 bits :contentReference[oaicite:4]{index=4}
+    }
+}
+
+static void syscall_random_i32(void *arg1, void *arg2, void *arg3) {
+    if (arg1) {
+        *(int32_t *)arg1 = (int32_t)lcg_next();  // uniform over all int32_t :contentReference[oaicite:5]{index=5}
+    }
+}
+
+static void syscall_random_double(void *arg1, void *arg2, void *arg3) {
+    if (arg1) {
+        uint32_t r = lcg_next();
+        // r / 2^32 yields [0,1) exactly, since double has 52 mantissa bits :contentReference[oaicite:6]{index=6}
+        *(double *)arg1 = (double)r / 4294967296.0;
+    }
+}
+
+/*
+ * syscall_random_float:
+ *   Generates a pseudo‑random float in [0,1).
+ *   arg1: pointer to float where result is stored.
+ *   arg2, arg3: unused.
+ */
+static void syscall_random_float(void *arg1, void *arg2, void *arg3)
+{
+    /* advance LCG */
     rand_seed = rand_seed * 1103515245 + 12345;
+
     if (arg1)
-        *(uint32_t *)arg1 = (rand_seed >> 16) & 0x7FFF;
+    {
+        /* take the high 15 bits, divide by 2^15 to get [0,1) */
+        uint32_t v = (rand_seed >> 16) & 0x7FFF;
+        *(float *)arg1 = v / 32768.0f;
+    }
 }
 
 static void syscall_putchar(void *arg1, void *arg2, void *arg3)
@@ -103,14 +143,17 @@ static void syscall_ansi_color(void *arg1, void *arg2, void *arg3)
 
 // Syscall table
 static syscall_handler_t syscall_table[] = {
-    syscall_print,     // 0
-    syscall_exit,      // 1
-    syscall_getchar,   // 2
-    syscall_uptime_ms, // 3
-    syscall_random,    // 4
-    syscall_putchar,   // 5
-    syscall_readline,  // 6
-    syscall_ansi_color // 7
+    syscall_print,         // 0
+    syscall_exit,          // 1
+    syscall_getchar,       // 2
+    syscall_uptime_ms,     // 3
+    syscall_random_float,  // 4
+    syscall_putchar,       // 5
+    syscall_readline,      // 6
+    syscall_ansi_color,    // 7
+    syscall_random_u32,    // 8
+    syscall_random_i32,    // 9
+    syscall_random_double  // 10
 };
 #define SYSCALL_COUNT (sizeof(syscall_table) / sizeof(syscall_handler_t))
 

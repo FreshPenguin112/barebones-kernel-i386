@@ -8,6 +8,7 @@
         "_string_utils.h": "c",
         "io.h": "c",
         "hhh": "c",
-        "ctype.h": "c"
+        "ctype.h": "c",
+        "cstdint": "c"
     }
 }

@@ -9,10 +9,13 @@
 #define SYSCALL_EXIT 1
 #define SYSCALL_GETCHAR 2
 #define SYSCALL_UPTIME_MS 3
-#define SYSCALL_RANDOM 4
+#define SYSCALL_RANDOM_FLOAT 4
 #define SYSCALL_PUTCHAR 5
 #define SYSCALL_READLINE 6
 #define SYSCALL_ANSI_PRINT 7
+#define SYSCALL_RANDOM_U32 8
+#define SYSCALL_RANDOM_I32 9
+#define SYSCALL_RANDOM_DOUBLE 10
 
 // Helper macros for up to 4 arguments, auto-casting to void*
 #define _syscall4(n, a1, a2, a3) syscall_impl((n), (void *)(a1), (void *)(a2), (void *)(a3))
