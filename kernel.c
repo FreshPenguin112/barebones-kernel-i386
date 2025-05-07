@@ -57,7 +57,7 @@ void serial_write_str(const char *s)
 }
 
 // -----------------------------------------------------------------------------
-// VGA text‐mode routines (unchanged)
+// VGA text‐mode routines
 // -----------------------------------------------------------------------------
 void term_init(void)
 {
@@ -195,7 +195,7 @@ void kernel_print(const char *s)
 }
 
 // -----------------------------------------------------------------------------
-// Map human names → ANSI codes
+// Map english names → ANSI codes
 // -----------------------------------------------------------------------------
 static int ansi_fg_code(const char *c)
 {
