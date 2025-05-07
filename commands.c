@@ -2,6 +2,7 @@
 #include "string_utils.h"
 #include "tarfs.h"
 #include "elf.h"
+#include "qemu_utils.h"
 
 extern void kernel_print(const char *str);
 extern void kernel_print_ansi(const char *text, char *fg_name, char *bg_name);
@@ -243,6 +244,77 @@ void cmd_ls(int argc, char **argv)
     }
 }
 
+// Print 'size' bytes from 'data' in classic hexdump style.
+static void hex_dump(const char *data, unsigned int size)
+{
+    const unsigned char *bytes = (const unsigned char*)data;
+    char buf[16+1];
+
+    for (unsigned int off = 0; off < size; off += 16) {
+        // 1) print offset
+        // e.g. "00000000: "
+        {
+            char off_str[9];
+            // simple hex convert for offset (8 hex digits)
+            for (int i = 0; i < 8; i++) {
+                unsigned int shift = (7 - i) * 4;
+                unsigned int digit = (off >> shift) & 0xF;
+                off_str[i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
+            }
+            off_str[8] = '\0';
+            kernel_print_ansi(off_str, "green", "none");
+            kernel_print(": ");
+        }
+
+        // 2) print hex bytes
+        for (int i = 0; i < 16; i++) {
+            if (off + i < size) {
+                unsigned char b = bytes[off + i];
+                // two hex digits
+                char h[3];
+                h[0] = (b >> 4) < 10 ? '0' + (b >> 4) : 'A' + (b >> 4) - 10;
+                h[1] = (b & 0xF) < 10 ? '0' + (b & 0xF) : 'A' + (b & 0xF) - 10;
+                h[2] = '\0';
+                kernel_print_ansi(h, "green", "none");
+            } else {
+                // pad beyond end
+                kernel_print("  ");
+            }
+            // space after every byte, extra space at 8-byte mark
+            kernel_print(i == 7 ? "  " : " ");
+        }
+
+        // 3) ASCII side
+        kernel_print(" ");
+        for (int i = 0; i < 16 && off + i < size; i++) {
+            unsigned char c = bytes[off + i];
+            buf[i] = (c >= 32 && c < 127) ? c : '.';
+        }
+        buf[(off + 16 <= size) ? 16 : (size - off)] = '\0';
+        kernel_print_ansi(buf, "green", "none");
+
+        kernel_print("\n");
+    }
+}
+
+void cmd_hexdump(int argc, char **argv)
+{
+    if (argc < 2) {
+        kernel_print_ansi("Usage: hexdump <file>\n", "red", "none");
+        return;
+    }
+
+    unsigned int size;
+    const char *data = tarfs_cat(argv[1], &size);
+    if (!data) {
+        kernel_print_ansi("No such file\n", "red", "none");
+        return;
+    }
+
+    hex_dump(data, size);
+}
+
+
 void cmd_cat(int argc, char **argv)
 {
     if (argc < 2)
@@ -272,7 +344,16 @@ void cmd_help(int argc, char **argv)
     kernel_print("  ls         - List files\n");
     kernel_print("  cat <file> - Display file contents\n");
     kernel_print("  run <file.elf> - Run ELF executable\n");
+    kernel_print("  hexdump <file> - Dump file in hex + ASCII\n");
+    kernel_print("  exit       - Exit the shell\n");
+    kernel_print("  rev <text> - Reverse the given text\n");
 }
+
+void cmd_exit(int argc, char **argv)
+{
+    kernel_print_ansi("Exiting shell...\n", "red", "none");
+    qemu_halt_exit(0);
+}    
 
 void cmd_run(int argc, char **argv)
 {
@@ -291,14 +372,60 @@ void cmd_run(int argc, char **argv)
     // else: program ran and returned
 }
 
+static void rev(char *s) {
+    char t[128];
+    int len = strlen(s);
+    int i = 0;
+
+    // Copy characters from s into t in reverse order
+    while (len > 0) {
+        t[i++] = s[--len];
+    }
+    t[i] = '\0';
+
+    // Copy reversed string back into s
+    strcpy(s, t);
+}
+
+void cmd_rev(int argc, char **argv) {
+    if (argc < 2) {
+        kernel_print_ansi("Usage: rev <text>\n", "red", "none");
+        return;
+    }
+
+    // Reconstruct the input text from argv[1..]
+    char buf[128];
+    int pos = 0;
+    for (int i = 1; i < argc && pos < (int)sizeof(buf) - 1; i++) {
+        for (int j = 0; argv[i][j] && pos < (int)sizeof(buf) - 1; j++) {
+            buf[pos++] = argv[i][j];
+        }
+        if (i < argc - 1 && pos < (int)sizeof(buf) - 1) {
+            buf[pos++] = ' ';
+        }
+    }
+    buf[pos] = '\0';
+
+    // Reverse it in-place
+    rev(buf);
+
+    // Print the result
+    kernel_print_ansi(buf, "green", "none");
+    kernel_print("\n");
+}
+
+
 // Command table
 command_t commands[] = {
-    {"echo", cmd_echo, "Print text to screen"},
-    {"help", cmd_help, "Show help message"},
-    {"bc", cmd_bc, "Calculate math expression"},
-    {"clear", cmd_clear, "Clear the screen"},
-    {"ls", cmd_ls, "List files"},
-    {"cat", cmd_cat, "Display file contents"},
-    {"run", cmd_run, "Run ELF executable"},
-    {0, 0, 0} // Null terminator
+    {"echo",     cmd_echo,      "Print text to screen"},
+    {"help",     cmd_help,      "Show this help message"},
+    {"bc",       cmd_bc,        "Calculate math expression"},
+    {"clear",    cmd_clear,     "Clear the screen"},
+    {"ls",       cmd_ls,        "List files"},
+    {"cat",      cmd_cat,       "Display file contents"},
+    {"hexdump",  cmd_hexdump,   "Dump file in hex + ASCII"},
+    {"run",      cmd_run,       "Run ELF executable"},
+    {"rev",      cmd_rev,       "Reverse the given text"},
+    {"exit",     cmd_exit,      "Exit the shell"},
+    {0, 0, 0}
 };
