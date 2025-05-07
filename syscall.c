@@ -20,7 +20,7 @@ static void syscall_print(void *arg1, void *arg2, void *arg3)
 
 static void syscall_exit(void *arg1, void *arg2, void *arg3)
 {
-    kernel_print("Exiting program.\n");
+    //kernel_print("Exiting program.\n");
     return;
     // qemu_halt_exit(0);
 }

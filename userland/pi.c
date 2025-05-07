@@ -48,9 +48,8 @@ static long double compute_pi(int digits) {
 }
 
 void _start(void) {
-   syscall(SYSCALL_PRINT, "Compute ? via Gauss-Legendre.\n");
    char buf_in[8];
-   syscall(SYSCALL_PRINT, "Digits (1-15)? ");
+   syscall(SYSCALL_PRINT, "digits of pi to calculate(1-15)? ");
    syscall(SYSCALL_READLINE, buf_in, sizeof(buf_in));
    int digs = atoi(buf_in);
    if (digs<1 || digs>15) {
@@ -62,4 +61,5 @@ void _start(void) {
    dtoa(pi, buf_out, digs);
    syscall(SYSCALL_PRINT, buf_out);
    syscall(SYSCALL_PRINT, "\n");
+   syscall(SYSCALL_EXIT);
 }

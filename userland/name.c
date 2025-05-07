@@ -8,5 +8,5 @@ void _start(void)
     syscall(SYSCALL_ANSI_PRINT, "Hello, ", "green", "none");
     syscall(SYSCALL_ANSI_PRINT, name, "cyan", "none");
     syscall(SYSCALL_ANSI_PRINT, "!\n", "cyan", "none");
-    return;
+    syscall(SYSCALL_EXIT);
 }
