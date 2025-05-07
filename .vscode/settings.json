@@ -9,6 +9,7 @@
         "io.h": "c",
         "hhh": "c",
         "ctype.h": "c",
-        "cstdint": "c"
+        "cstdint": "c",
+        "float.h": "c"
     }
 }

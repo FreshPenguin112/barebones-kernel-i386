@@ -83,7 +83,7 @@ void term_reset_color(void)
 
 uint8_t ansi_to_vga_color(int code)
 {
-    // maps 30–37 or 40–47 → VGA palette
+    // maps 30-37 or 40-47 → VGA palette
     switch (code)
     {
     case 30:
