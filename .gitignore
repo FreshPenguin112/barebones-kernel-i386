@@ -16,3 +16,4 @@ mykernel.elf
 initfs/*.elf
 initfs.tar
 initramfs.c
+.vscode
