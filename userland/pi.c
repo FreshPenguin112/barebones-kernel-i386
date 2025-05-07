@@ -13,7 +13,7 @@ static long double sqrt_newton(long double N, int digits) {
    // eps = 0.5 * 10^(-digits)
    for (int i = 0; i < digits; i++) eps *= 0.1L;      // :contentReference[oaicite:4]{index=4}
    long double x = (N > 1.0L ? N : 1.0L);
-   for (int iter = 0; iter < 1000; iter++) {         // cap iterations
+   for (int iter = 0; iter < 150; iter++) {         // cap iterations
        long double next = 0.5L * (x + N / x);
        long double diff = (next > x ? next - x : x - next);
        if (diff < eps) break;
@@ -62,11 +62,11 @@ static long double compute_pi(int digits) {
 void _start(void) {
    syscall(SYSCALL_PRINT, "Compute ? via Gauss-Legendre.\n");
    char buf_in[8];
-   syscall(SYSCALL_PRINT, "Digits (1-100)? ");
+   syscall(SYSCALL_PRINT, "Digits (1-15)? ");
    syscall(SYSCALL_READLINE, buf_in, sizeof(buf_in));
    int digs = atoi(buf_in);
-   if (digs<1 || digs>100) {
-       syscall(SYSCALL_PRINT, "Error: enter 1-100.\n");
+   if (digs<1 || digs>15) {
+       syscall(SYSCALL_PRINT, "Error: enter 1-15.\n");
        return;
    }
    long double pi = compute_pi(digs);
