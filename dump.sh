@@ -1,2 +1,2 @@
-docker run --mount type=bind,source=$(realpath .),target=/root -w /root kevincharm/i686-elf-gcc-toolchain:5.5.0 i686-elf-objdump -D -S -s $1 > $(basename $1 .elf).out
+docker run --mount type=bind,source=$(realpath .),target=/root -w /root kevincharm/i686-elf-gcc-toolchain:latest i686-elf-objdump -D -S -s $1 > $(basename $1 .elf).out
 echo "Dumped $1 to $(basename $1 .elf).out"

@@ -1,6 +1,5 @@
-#include <stddef.h>
-#include <stdint.h>
-#include "shell.h" // Change to use quotes instead of angle brackets
+#include "bootboot.h"      // BOOTBOOT header file
+#include "shell.h"
 #include "serial.h"
 #include "qemu_utils.h"
 #include "tarfs.h"
@@ -9,6 +8,13 @@
 #include "string_utils.h"
 #include "pit.h"
 #include "io.h"
+#include <stddef.h>
+#include <stdint.h>
+
+// BOOTBOOT structure (provided by bootloader)
+extern BOOTBOOT bootboot;           // See bootboot.h
+extern unsigned char environment[];  // Environment variables
+extern uint8_t fb;                  // Framebuffer address
 
 // -----------------------------------------------------------------------------
 // VGA text‐mode state
@@ -27,29 +33,6 @@ volatile uint32_t timer_ticks = 0;
 // -----------------------------------------------------------------------------
 // Serial (COM1) setup
 // -----------------------------------------------------------------------------
-// #define COM1_PORT 0x3F8
-
-/*
-void serial_init(void) {
-    outb(COM1_PORT + 1, 0x00);    // Disable all interrupts
-    outb(COM1_PORT + 3, 0x80);    // Enable DLAB
-    outb(COM1_PORT + 0, 0x03);    // Divisor low = 3 (38400 baud)
-    outb(COM1_PORT + 1, 0x00);    // Divisor high
-    outb(COM1_PORT + 3, 0x03);    // 8 bits, no parity, 1 stop bit
-    outb(COM1_PORT + 2, 0xC7);    // FIFO enabled, clear, 14-byte threshold
-    outb(COM1_PORT + 4, 0x0B);    // IRQs enabled, RTS/DSR set
-}
-
-int serial_is_transmit_empty(void) {
-    return inb(COM1_PORT + 5) & 0x20;
-}
-
-void serial_write_char(char c) {
-    while (!serial_is_transmit_empty()) {}
-    outb(COM1_PORT, c);
-}
-*/
-
 void serial_write_str(const char *s)
 {
     for (size_t i = 0; s[i]; i++)
@@ -150,7 +133,7 @@ void term_putc_vga(char c)
 }
 
 // -----------------------------------------------------------------------------
-// Unified “putc” for serial + VGA
+// Unified "putc" for serial + VGA
 // -----------------------------------------------------------------------------
 void kernel_putc(char c)
 {
@@ -158,7 +141,7 @@ void kernel_putc(char c)
     term_putc_vga(c);
 }
 
-// send ESC [ … m to serial & update VGA; `seq` is digits only, no ‘m’
+// send ESC [ … m to serial & update VGA; `seq` is digits only, no 'm'
 void kernel_handle_ansi_and_putc(const char *seq, size_t len)
 {
     serial_write_str("\033[");
@@ -173,7 +156,7 @@ void kernel_handle_ansi_and_putc(const char *seq, size_t len)
     term_handle_ansi_code(code);
 }
 
-// print a plain C string, handling only “ESC[…m” sequences
+// print a plain C string, handling only "ESC[…m" sequences
 void kernel_print(const char *s)
 {
     for (size_t i = 0; s[i]; i++)
@@ -252,8 +235,8 @@ static size_t fmt_code(char out[2], int code)
 // High-level ANSI wrapper
 // -----------------------------------------------------------------------------
 void kernel_print_ansi(const char *text,
-                       const char *fg_name,
-                       const char *bg_name)
+                     const char *fg_name,
+                     const char *bg_name)
 {
     char buf[2];
     size_t len;
@@ -280,9 +263,9 @@ void kernel_print_ansi(const char *text,
         kernel_handle_ansi_and_putc("0", 1);
 }
 
-void kernel_putc_ansi(const char text,
-                       const char *fg_name,
-                       const char *bg_name)
+void kernel_putc_ansi(char text,
+                    const char *fg_name,
+                    const char *bg_name)
 {
     char buf[2];
     size_t len;
@@ -342,7 +325,7 @@ void syscall_handler(int syscall_number, void *arg1, void *arg2, void *arg3)
 // Set up the syscall interrupt (int 0x80)
 void setup_syscalls()
 {
-    idt_set_gate(0x80, (uint32_t)syscall_handler_asm, 0x08, 0x8E);
+    idt_set_gate(0x80, (uint64_t)syscall_handler_asm, 0x08, 0x8E);
 }
 
 // -----------------------------------------------------------------------------
@@ -366,10 +349,23 @@ void kernel_main(void)
     term_init();
     ansi_clearhome();
 
-    idt_init();                                                // 1. Set up IDT
-    pit_init(1000);                                            // 2. Set up PIT
-    idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E); // 3. IRQ0
-    setup_syscalls();                                          // 4. Syscalls
+    // Display BOOTBOOT information
+    kernel_print("BOOTBOOT x86_64-EFI Kernel\n");
+    kernel_print("-------------------------\n");
+    kernel_print_ansi("Bootloader: ", "green", "black");
+    kernel_print(bootboot.protocol == PROTOCOL_MINIMAL ? "Minimal" : "Static");
+    kernel_print("\n");
+
+    kernel_print_ansi("Framebuffer: ", "green", "black");
+    kernel_print("Yes\n");
+
+    kernel_print_ansi("Memory Map: ", "green", "black");
+    kernel_print("Available\n\n");
+
+    idt_init();                                             // 1. Set up IDT
+    pit_init(1000);                                         // 2. Set up PIT
+    idt_set_gate(32, (uint64_t)timer_handler_asm, 0x08, 0x8E); // 3. IRQ0
+    setup_syscalls();                                       // 4. Syscalls
 
     asm volatile("sti"); // 5. Enable interrupts
 

@@ -1,4 +1,4 @@
-qemu-system-i386 \
+qemu-system-x86_64 \
   -enable-kvm \
   -cpu host \
   -kernel mykernel.elf \
