@@ -16,12 +16,14 @@
 #define SYSCALL_RANDOM_U32 8
 #define SYSCALL_RANDOM_I32 9
 #define SYSCALL_RANDOM_DOUBLE 10
+#define SYSCALL_SET_MODE 20
+#define SYSCALL_PUT_PIXEL 21
 
 // Helper macros for up to 4 arguments, auto-casting to void*
-#define _syscall4(n, a1, a2, a3) syscall_impl((n), (void *)(a1), (void *)(a2), (void *)(a3))
-#define _syscall3(n, a1, a2) syscall_impl((n), (void *)(a1), (void *)(a2), NULL)
-#define _syscall2(n, a1) syscall_impl((n), (void *)(a1), NULL, NULL)
-#define _syscall1(n) syscall_impl((n), NULL, NULL, NULL)
+#define _syscall4(n, a1, a2, a3) syscall_impl((n), (void *)(uintptr_t)(a1), (void *)(uintptr_t)(a2), (void *)(uintptr_t)(a3))
+#define _syscall3(n, a1, a2)     syscall_impl((n), (void *)(uintptr_t)(a1), (void *)(uintptr_t)(a2), NULL)
+#define _syscall2(n, a1)         syscall_impl((n), (void *)(uintptr_t)(a1), NULL, NULL)
+#define _syscall1(n)             syscall_impl((n), NULL, NULL, NULL)
 
 // Count arguments and dispatch to the right macro
 #define _GET_SYSCALL(_1, _2, _3, _4, NAME, ...) NAME

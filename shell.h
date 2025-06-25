@@ -1,6 +1,8 @@
 #ifndef SHELL_H
 #define SHELL_H
 
+#include "keyboard.h"
+
 // Maximum lengths for input handling
 #define MAX_INPUT_LENGTH 256
 #define MAX_ARGS 16

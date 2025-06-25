@@ -1,5 +1,6 @@
 #include "tarfs.h"
 #include "string_utils.h"
+#include "kernel.h"
 #include <stdint.h>
 
 #define EI_NIDENT 16
@@ -35,8 +36,6 @@ typedef struct
 } Elf32_Phdr;
 
 typedef void (*entry_fn_t)(void);
-
-extern volatile int user_program_exited;
 
 static void (*elf_exit_callback)(void) = 0;
 

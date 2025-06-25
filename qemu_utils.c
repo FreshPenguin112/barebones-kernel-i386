@@ -1,5 +1,6 @@
 #include "qemu_utils.h"
 #include <stdint.h>
+#include "kernel.h"
 
 extern void kernel_print(const char *str);
 

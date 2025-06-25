@@ -2,13 +2,12 @@
 #include "string_utils.h"
 #include "qemu_utils.h"
 #include "serial.h"
-// #include "kernel.h" // for kernel_print, etc.
+#include "kernel.h"
 #include <stdint.h>
 
 extern void kernel_print(const char *str);
 extern volatile uint32_t timer_ticks; // You need a timer interrupt to increment this
 extern void kernel_putc(char c);
-extern void kernel_print_ansi(int fg, int bg);
 
 typedef void (*syscall_handler_t)(void *arg1, void *arg2, void *arg3);
 
@@ -128,17 +127,33 @@ static void syscall_readline(void *arg1, void *arg2, void *arg3)
 // Syscall handler
 static void syscall_ansi_print(void *arg1, void *arg2, void *arg3)
 {
+    // Print a test string with the given colors
     int fg = (int)(uintptr_t)arg1;
     int bg = (int)(uintptr_t)arg2;
-    kernel_print_ansi(fg, bg);
+    // Convert color codes to color names if needed, or use as string
+    // For now, just print a test string
+    kernel_print_ansi("ANSI PRINT\n", "white", "black");
 }
 
 // Syscall handler
 static void syscall_ansi_color(void *arg1, void *arg2, void *arg3)
 {
+    // Set color for subsequent prints (not implemented, so just print test)
     int fg = (int)(uintptr_t)arg1;
     int bg = (int)(uintptr_t)arg2;
-    kernel_print_ansi(fg, bg);
+    kernel_print_ansi("ANSI COLOR\n", "white", "black");
+}
+
+// Graphics syscall handlers
+extern void vga_set_mode(uint8_t mode);
+extern void vga_put_pixel(int x, int y, uint8_t color);
+
+static void syscall_set_mode(void *arg1, void *arg2, void *arg3) {
+    vga_set_mode((uint8_t)(uintptr_t)arg1);
+}
+
+static void syscall_put_pixel(void *arg1, void *arg2, void *arg3) {
+    vga_put_pixel((int)(uintptr_t)arg1, (int)(uintptr_t)arg2, (uint8_t)(uintptr_t)arg3);
 }
 
 // Syscall table
@@ -153,7 +168,9 @@ static syscall_handler_t syscall_table[] = {
     syscall_ansi_color,    // 7
     syscall_random_u32,    // 8
     syscall_random_i32,    // 9
-    syscall_random_double  // 10
+    syscall_random_double, // 10
+    [SYSCALL_SET_MODE] = syscall_set_mode,
+    [SYSCALL_PUT_PIXEL] = syscall_put_pixel
 };
 #define SYSCALL_COUNT (sizeof(syscall_table) / sizeof(syscall_handler_t))
 

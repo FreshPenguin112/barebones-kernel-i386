@@ -1,0 +1,45 @@
+# GDB Debugging Setup for barebones-kernel-i386
+
+## 1. Build with Debug Symbols
+Make sure your kernel is built with `-g` (already present in your build.sh):
+
+    i686-elf-gcc -g -std=gnu99 -ffreestanding -c *.s *.c
+    i686-elf-gcc -g -ffreestanding -nostdlib -T linker.ld *.o -o mykernel.elf -lgcc
+
+## 2. QEMU Run Command for GDB
+Use this command to start QEMU with GDB support and serial output:
+
+    qemu-system-i386 -enable-kvm -cpu host -kernel mykernel.elf \
+      -device isa-debug-exit,iobase=0x501,iosize=0x04 \
+      -no-reboot -display gtk -serial stdio -s -S
+
+- `-s` opens a GDB server on port 1234
+- `-S` freezes CPU at startup (waits for GDB)
+- `-serial stdio` shows serial output in your terminal
+
+## 3. Start GDB and Connect
+In another terminal:
+
+    gdb mykernel.elf
+    (gdb) target remote :1234
+    (gdb) c
+
+## 4. Useful GDB Commands
+- `break kernel_main` — set a breakpoint at kernel entry
+- `break keyboard_read_char` — break on keyboard input
+- `break vga_set_mode` — break on mode switch
+- `info registers` — show CPU registers
+- `bt` — show backtrace
+- `stepi` — step one instruction
+- `continue` — resume execution
+
+## 5. QEMU Debug Logging (Optional)
+To log all CPU exceptions and resets:
+
+    qemu-system-i386 ... -d int,cpu_reset,guest_errors -D qemu_debug.log
+
+Check `qemu_debug.log` after a crash for exception info.
+
+---
+
+**Tip:** If you hit a crash, use `info registers` and `bt` in GDB to see where it happened. You can also set breakpoints on all exception handlers to catch faults early.
