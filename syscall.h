@@ -2,7 +2,7 @@
 #define SYSCALL_H
 
 #include <stdint.h>
-#include <stddef.h> // For NULL
+#include <stddef.h>
 
 // Syscall numbers
 #define SYSCALL_PRINT 0
@@ -39,5 +39,9 @@ static inline void syscall_impl(int syscall_number, void *arg1, void *arg2, void
 
 // Syscall dispatcher (kernel-side)
 void syscall_dispatcher(int syscall_number, void *arg1, void *arg2, void *arg3);
+
+typedef void (*syscall_handler_t)(void *arg1, void *arg2, void *arg3);
+
+void syscall_handler(void *arg1, void *arg2, void *arg3);
 
 #endif

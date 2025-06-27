@@ -1,9 +1,12 @@
 #include "pit.h"
 #include "io.h"
+#include <stdint.h>
 
 #define PIT_FREQ 1193182
 #define PIT_CHAN0 0x40
 #define PIT_CMD 0x43
+
+volatile uint64_t timer_ticks = 0;
 
 void pit_init(uint32_t freq)
 {

@@ -1,6 +1,8 @@
 #include <stddef.h>
 #include <stdint.h>
-#include "shell.h" // Change to use quotes instead of angle brackets
+#include <stdbool.h>
+#include "limine.h"
+#include "shell.h"
 #include "serial.h"
 #include "qemu_utils.h"
 #include "tarfs.h"
@@ -10,9 +12,30 @@
 #include "pit.h"
 #include "io.h"
 
-// -----------------------------------------------------------------------------
-// VGA text‐mode state
-// -----------------------------------------------------------------------------
+// Limine framebuffer request
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_framebuffer_request framebuffer_request = {
+    .id = LIMINE_FRAMEBUFFER_REQUEST,
+    .revision = 0
+};
+
+// Framebuffer helpers
+static struct limine_framebuffer *fb = NULL;
+static uint32_t fb_width = 0, fb_height = 0, fb_pitch = 0;
+static uint32_t *fb_addr = NULL;
+
+void fb_draw_pixel(uint32_t x, uint32_t y, uint32_t color) {
+    if (!fb_addr || x >= fb_width || y >= fb_height) return;
+    fb_addr[y * (fb_pitch / 4) + x] = color;
+}
+
+void fb_clear(uint32_t color) {
+    if (!fb_addr) return;
+    for (uint32_t y = 0; y < fb_height; y++)
+        for (uint32_t x = 0; x < fb_width; x++)
+            fb_draw_pixel(x, y, color);
+}
+
 volatile uint16_t *vga_buffer = (uint16_t *)0xB8000;
 const int VGA_COLS = 80;
 const int VGA_ROWS = 25;
@@ -22,7 +45,7 @@ int term_row = 0;
 uint8_t term_color = 0x0F; // white on black
 
 volatile int user_program_exited = 0;
-volatile uint32_t timer_ticks = 0;
+//volatile uint64_t timer_ticks = 0;
 
 // -----------------------------------------------------------------------------
 // Serial (COM1) setup
@@ -50,11 +73,6 @@ void serial_write_char(char c) {
 }
 */
 
-void serial_write_str(const char *s)
-{
-    for (size_t i = 0; s[i]; i++)
-        serial_write_char(s[i]);
-}
 
 // -----------------------------------------------------------------------------
 // VGA text‐mode routines
@@ -334,15 +352,15 @@ void (*elf_exit_callback)(void) = 0;
 
 extern void syscall_handler_asm();
 
-void syscall_handler(int syscall_number, void *arg1, void *arg2, void *arg3)
+void syscall_handler(void *arg1, void *arg2, void *arg3)
 {
-    syscall_dispatcher(syscall_number, arg1, arg2, arg3);
+    syscall_dispatcher(0, arg1, arg2, arg3); // 0 as dummy syscall_number
 }
 
 // Set up the syscall interrupt (int 0x80)
 void setup_syscalls()
 {
-    idt_set_gate(0x80, (uint32_t)syscall_handler_asm, 0x08, 0x8E);
+    idt_set_gate(0x80, (uint64_t)syscall_handler_asm, 0x08, 0x8E);
 }
 
 // -----------------------------------------------------------------------------
@@ -360,15 +378,32 @@ void timer_handler(void)
 // -----------------------------------------------------------------------------
 // Kernel entry point
 // -----------------------------------------------------------------------------
-void kernel_main(void)
-{
+void kmain(void) {
+    // Check Limine base revision
+    //if (LIMINE_BASE_REVISION_SUPPORTED == false) {
+        //for (;;) { asm volatile ("hlt"); }
+    //}
+    // Check framebuffer
+    if (framebuffer_request.response == NULL || framebuffer_request.response->framebuffer_count < 1) {
+        for (;;) { asm volatile ("hlt"); }
+    }
+    fb = framebuffer_request.response->framebuffers[0];
+    fb_width = fb->width;
+    fb_height = fb->height;
+    fb_pitch = fb->pitch;
+    fb_addr = (uint32_t *)fb->address;
+
+    // Example: clear screen to blue, draw a white diagonal
+    fb_clear(0x0000FF);
+    for (uint32_t i = 0; i < fb_width && i < fb_height; i++)
+        fb_draw_pixel(i, i, 0xFFFFFF);
+
     serial_init();
     term_init();
     ansi_clearhome();
 
     idt_init();                                                // 1. Set up IDT
     pit_init(1000);                                            // 2. Set up PIT
-    idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E); // 3. IRQ0
     setup_syscalls();                                          // 4. Syscalls
 
     asm volatile("sti"); // 5. Enable interrupts
@@ -379,9 +414,5 @@ void kernel_main(void)
 
     shell_init();
     shell_run();
-
-    for (;;)
-    {
-        asm volatile("hlt");
-    }
+    for (;;) { asm volatile ("hlt"); }
 }

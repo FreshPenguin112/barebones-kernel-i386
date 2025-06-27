@@ -1,5 +1,6 @@
 .global idt_load
+.type idt_load, @function
 idt_load:
-    movl 4(%esp), %eax    # Load the IDT pointer address from the stack
-    lidt (%eax)           # Load the IDT
+    mov %rdi, %rax    # IDT pointer in rdi (x86_64 ABI)
+    lidt (%rax)
     ret

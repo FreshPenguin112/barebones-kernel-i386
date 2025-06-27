@@ -1,6 +1,6 @@
 #include "serial.h"
 #include "io.h"
-
+#include <stddef.h>
 #define COM1 0x3F8
 
 void serial_init(void)
@@ -36,4 +36,10 @@ void serial_write_char(char c)
     while (!serial_is_transmit_empty())
         ;
     outb(COM1, c);
+}
+
+void serial_write_str(const char *s)
+{
+    for (size_t i = 0; s[i]; i++)
+        serial_write_char(s[i]);
 }

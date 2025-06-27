@@ -17,3 +17,6 @@ initfs/*.elf
 initfs.tar
 initramfs.c
 .vscode
+*.iso
+isodir
+hdd

@@ -2,11 +2,10 @@
 #include "string_utils.h"
 #include "qemu_utils.h"
 #include "serial.h"
-// #include "kernel.h" // for kernel_print, etc.
 #include <stdint.h>
 
 extern void kernel_print(const char *str);
-extern volatile uint32_t timer_ticks; // You need a timer interrupt to increment this
+extern volatile uint64_t timer_ticks;
 extern void kernel_putc(char c);
 extern void kernel_print_ansi(int fg, int bg);
 
@@ -20,9 +19,7 @@ static void syscall_print(void *arg1, void *arg2, void *arg3)
 
 static void syscall_exit(void *arg1, void *arg2, void *arg3)
 {
-    //kernel_print("Exiting program.\n");
     return;
-    // qemu_halt_exit(0);
 }
 
 static void syscall_getchar(void *arg1, void *arg2, void *arg3)
@@ -38,7 +35,7 @@ static void syscall_uptime_ms(void *arg1, void *arg2, void *arg3)
 {
     if (arg1)
     {
-        *(uint32_t *)arg1 = timer_ticks; // or convert to ms if needed
+        *(uint64_t *)arg1 = timer_ticks;
     }
 }
 

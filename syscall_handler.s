@@ -1,31 +1,31 @@
 .section .text
 .global syscall_handler_asm
+.type syscall_handler_asm, @function
 
+/* x86_64 syscall handler stub for Limine */
 syscall_handler_asm:
-    # Save segment registers
-    push %ds
-    push %es
-    push %fs
-    push %gs
+    /* Save registers */
+    push %rdi
+    push %rsi
+    push %rdx
+    push %rcx
+    push %r8
+    push %r9
+    push %r10
+    push %r11
 
-    push %eax              # Save syscall number
-    mov $0x10, %ax
-    mov %ax, %ds
-    mov %ax, %es
-    pop %eax               # Restore syscall number
-
-    # Push syscall arguments for C (from userland: eax, ebx, ecx)
-    push %ecx        # arg2
-    push %ebx        # arg1
-    push %eax        # syscall_number
-
+    /* Call C handler: syscall_handler(rdi, rsi, rdx) */
     call syscall_handler
-    add $12, %esp    # Clean up stack
 
-    # Restore segment registers
-    pop %gs
-    pop %fs
-    pop %es
-    pop %ds
+    /* Restore registers */
+    pop %r11
+    pop %r10
+    pop %r9
+    pop %r8
+    pop %rcx
+    pop %rdx
+    pop %rsi
+    pop %rdi
 
-    iret
+    /* Return from syscall */
+    sysretq

@@ -1,0 +1,14 @@
+#!/bin/sh
+set -ex
+
+# Download limine.h
+curl -Lo limine/limine.h https://raw.githubusercontent.com/limine-bootloader/limine/v9.x-binary/limine.h
+
+# Download Limine binaries
+cd limine
+curl -LO https://github.com/limine-bootloader/limine/releases/download/v9.0-binary/limine-bios.sys
+curl -LO https://github.com/limine-bootloader/limine/releases/download/v9.0-binary/limine-bios-cd.bin
+curl -LO https://github.com/limine-bootloader/limine/releases/download/v9.0-binary/limine-uefi-cd.bin
+curl -LO https://github.com/limine-bootloader/limine/releases/download/v9.0-binary/BOOTX64.EFI
+curl -LO https://github.com/limine-bootloader/limine/releases/download/v9.0-binary/BOOTIA32.EFI
+cd ..
