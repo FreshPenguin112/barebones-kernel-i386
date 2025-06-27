@@ -2,6 +2,7 @@
 #include "string_utils.h"
 #include "qemu_utils.h"
 #include "serial.h"
+#include "vga_graphics.h"
 // #include "kernel.h" // for kernel_print, etc.
 #include <stdint.h>
 
@@ -141,6 +142,26 @@ static void syscall_ansi_color(void *arg1, void *arg2, void *arg3)
     kernel_print_ansi(fg, bg);
 }
 
+// VGA graphics syscalls
+static void syscall_vga_set_mode(void *arg1, void *arg2, void *arg3) {
+    vga_set_mode();
+}
+static void syscall_vga_text_mode(void *arg1, void *arg2, void *arg3) {
+    vga_text_mode();
+}
+static void syscall_vga_plot_pixel(void *arg1, void *arg2, void *arg3) {
+    // arg1: x (int), arg2: y (int), arg3: color (uint8_t as int)
+    int x = (int)(uintptr_t)arg1;
+    int y = (int)(uintptr_t)arg2;
+    uint8_t color = (uint8_t)(uintptr_t)arg3;
+    vga_plot_pixel(x, y, color);
+}
+static void syscall_vga_clear(void *arg1, void *arg2, void *arg3) {
+    // arg1: color (uint8_t as int)
+    //uint8_t color = (uint8_t)(uintptr_t)arg1;
+    //vga_clear(color);
+}
+
 // Syscall table
 static syscall_handler_t syscall_table[] = {
     syscall_print,         // 0
@@ -153,7 +174,11 @@ static syscall_handler_t syscall_table[] = {
     syscall_ansi_color,    // 7
     syscall_random_u32,    // 8
     syscall_random_i32,    // 9
-    syscall_random_double  // 10
+    syscall_random_double, // 10
+    syscall_vga_set_mode,  // 11
+    syscall_vga_text_mode, // 12
+    syscall_vga_plot_pixel, // 13
+    //syscall_vga_clear      // 14
 };
 #define SYSCALL_COUNT (sizeof(syscall_table) / sizeof(syscall_handler_t))
 

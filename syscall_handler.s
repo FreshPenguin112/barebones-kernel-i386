@@ -2,30 +2,41 @@
 .global syscall_handler_asm
 
 syscall_handler_asm:
-    # Save segment registers
-    push %ds
-    push %es
-    push %fs
-    push %gs
+    # Save all general-purpose registers (x86_64 ABI)
+    pushq %rax
+    pushq %rbx
+    pushq %rcx
+    pushq %rdx
+    pushq %rsi
+    pushq %rdi
+    pushq %rbp
+    pushq %r8
+    pushq %r9
+    pushq %r10
+    pushq %r11
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
 
-    push %eax              # Save syscall number
-    mov $0x10, %ax
-    mov %ax, %ds
-    mov %ax, %es
-    pop %eax               # Restore syscall number
-
-    # Push syscall arguments for C (from userland: eax, ebx, ecx)
-    push %ecx        # arg2
-    push %ebx        # arg1
-    push %eax        # syscall_number
-
+    # Call syscall_handler (update C signature to match x86_64 calling convention)
     call syscall_handler
-    add $12, %esp    # Clean up stack
 
-    # Restore segment registers
-    pop %gs
-    pop %fs
-    pop %es
-    pop %ds
+    # Restore registers
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %r11
+    popq %r10
+    popq %r9
+    popq %r8
+    popq %rbp
+    popq %rdi
+    popq %rsi
+    popq %rdx
+    popq %rcx
+    popq %rbx
+    popq %rax
 
-    iret
+    iretq

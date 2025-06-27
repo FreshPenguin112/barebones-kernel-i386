@@ -137,12 +137,12 @@ void cmd_bc(int argc, char **argv)
 
     // Reconstruct the expression from argv[1..]
     char expr[128];
-    int pos = 0;
-    for (int i = 1; i < argc && pos < 127; i++)
+    size_t pos = 0;
+    for (int i = 1; i < argc && pos < sizeof(expr) - 1; i++)
     {
-        for (int j = 0; argv[i][j] && pos < 127; j++)
+        for (int j = 0; argv[i][j] && pos < sizeof(expr) - 1; j++)
             expr[pos++] = argv[i][j];
-        if (i < argc - 1 && pos < 127)
+        if (i < argc - 1 && pos < sizeof(expr) - 1)
             expr[pos++] = ' ';
     }
     expr[pos] = 0;
@@ -245,23 +245,23 @@ void cmd_ls(int argc, char **argv)
 }
 
 // Print 'size' bytes from 'data' in classic hexdump style.
-static void hex_dump(const char *data, unsigned int size)
+static void hex_dump(const char *data, size_t size)
 {
     const unsigned char *bytes = (const unsigned char*)data;
     char buf[16+1];
 
-    for (unsigned int off = 0; off < size; off += 16) {
+    for (size_t off = 0; off < size; off += 16) {
         // 1) print offset
         // e.g. "00000000: "
         {
-            char off_str[9];
-            // simple hex convert for offset (8 hex digits)
-            for (int i = 0; i < 8; i++) {
-                unsigned int shift = (7 - i) * 4;
-                unsigned int digit = (off >> shift) & 0xF;
+            char off_str[17];
+            // simple hex convert for offset (16 hex digits for 64-bit)
+            for (int i = 0; i < 16; i++) {
+                size_t shift = (15 - i) * 4;
+                size_t digit = (off >> shift) & 0xF;
                 off_str[i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
             }
-            off_str[8] = '\0';
+            off_str[16] = '\0';
             kernel_print_ansi(off_str, "green", "none");
             kernel_print(": ");
         }
@@ -304,7 +304,7 @@ void cmd_hexdump(int argc, char **argv)
         return;
     }
 
-    unsigned int size;
+    size_t size;
     const char *data = tarfs_cat(argv[1], &size);
     if (!data) {
         kernel_print_ansi("No such file\n", "red", "none");
@@ -322,14 +322,14 @@ void cmd_cat(int argc, char **argv)
         kernel_print_ansi("Usage: cat <file>\n", "red", "none");
         return;
     }
-    unsigned int sz;
+    size_t sz;
     const char *data = tarfs_cat(argv[1], &sz);
     if (!data)
     {
         kernel_print_ansi("No such file\n", "red", "none");
         return;
     }
-    for (unsigned int i = 0; i < sz; i++)
+    for (size_t i = 0; i < sz; i++)
         kernel_putc_ansi(data[i], "green", "none");
     kernel_print("\n");
 }

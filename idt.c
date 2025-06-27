@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "interrupt_handler.h"
 
 #define IDT_ENTRIES 256
 
@@ -48,6 +49,12 @@ void idt_init()
         idt_set_gate(i, 0, 0, 0);
     }
 
+    // Install catch-all handlers for all 256 vectors
+    for (int i = 0; i < IDT_ENTRIES; i++) {
+        // Use a function pointer array trick to get the address of catch_handler_N
+        extern void (*const catch_handler_table[])(void *);
+        idt_set_gate(i, (uint32_t)catch_handler_table[i], 0x08, 0x8E);
+    }
     // Load the IDT
     idt_load((uint32_t)&idtp);
 }
