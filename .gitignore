@@ -20,3 +20,4 @@ initramfs.c
 *.iso
 isodir
 hdd
+*.img
