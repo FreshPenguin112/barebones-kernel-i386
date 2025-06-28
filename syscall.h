@@ -31,7 +31,9 @@
 static inline void syscall_impl(int syscall_number, void *arg1, void *arg2, void *arg3)
 {
     asm volatile(
-        "int $0x80"
+        "sub $8, %%rsp\n\t"   // align to 16 bytes
+        "int $0x80\n\t"
+        "add $8, %%rsp\n\t"
         :
         : "a"(syscall_number), "b"(arg1), "c"(arg2), "d"(arg3)
         : "memory");

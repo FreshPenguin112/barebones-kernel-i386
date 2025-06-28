@@ -17,6 +17,7 @@ timer_handler_asm:
     push %rbx
     push %rax
     sub $8, %rsp         # align stack to 16 bytes before call
+    # Remove serial debug output for production
     call timer_handler
     add $8, %rsp
     pop %rax

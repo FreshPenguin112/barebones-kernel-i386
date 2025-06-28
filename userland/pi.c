@@ -47,7 +47,7 @@ static long double compute_pi(int digits) {
    return (a + b) * (a + b) / (4.0L * t);
 }
 
-void _start(void) {
+void main(void) {
    char buf_in[8];
    syscall(SYSCALL_PRINT, "digits of pi to calculate(1-15)? ");
    syscall(SYSCALL_READLINE, buf_in, sizeof(buf_in));

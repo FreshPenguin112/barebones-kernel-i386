@@ -1,7 +1,7 @@
 #include "../syscall.h"
 #include "../string_utils.h"
 
-void _start(void)
+void main(void)
 {
     // syscall(SYSCALL_PRINT, "this one is broken lol\n");
     uint32_t ms;

@@ -11,6 +11,7 @@
 #include "string_utils.h"
 #include "pit.h"
 #include "io.h"
+#include "gdt.h"
 
 // Limine framebuffer request
 __attribute__((used, section(".limine_requests")))
@@ -402,11 +403,34 @@ void kmain(void) {
     term_init();
     ansi_clearhome();
 
+    serial_write_str("[kmain] Before idt_init\n");
     idt_init();                                                // 1. Set up IDT
+    serial_write_str("[kmain] After idt_init\n");
     pit_init(1000);                                            // 2. Set up PIT
+    serial_write_str("[kmain] After pit_init\n");
     setup_syscalls();                                          // 4. Syscalls
+    serial_write_str("[kmain] After setup_syscalls\n");
 
+    serial_write_str("[kmain] timer_handler_asm addr: ");
+    serial_write_hex((uint64_t)timer_handler_asm);
+    serial_write_str("\n[kmain] syscall_handler_asm addr: ");
+    serial_write_hex((uint64_t)syscall_handler_asm);
+    serial_write_str("\n");
+    serial_write_str("[kmain] Dumping IDT pointer and first 3 entries...\n");
+    serial_write_str("[kmain] idtp.limit: ");
+    serial_write_hex((uint64_t)idtp.limit);
+    serial_write_str("\n[kmain] idtp.base: ");
+    serial_write_hex((uint64_t)idtp.base);
+    serial_write_str("\n[kmain] idt[0]: ");
+    serial_write_hex(*(uint64_t*)&idt[0]);
+    serial_write_str("\n[kmain] idt[32]: ");
+    serial_write_hex(*(uint64_t*)&idt[32]);
+    serial_write_str("\n[kmain] idt[128]: ");
+    serial_write_hex(*(uint64_t*)&idt[128]);
+    serial_write_str("\n");
+    serial_write_str("[kmain] Before sti\n");
     asm volatile("sti"); // 5. Enable interrupts
+    serial_write_str("[kmain] After sti\n");
 
     // 6. Everything is ready, start shell
     extern unsigned char initfs_tar[];

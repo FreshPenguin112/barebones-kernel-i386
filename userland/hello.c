@@ -1,7 +1,6 @@
 #include "../syscall.h"
 
-void _start(void)
+void main(void)
 {
     syscall(SYSCALL_PRINT, "Hello, World!\n");
-    return;
 }

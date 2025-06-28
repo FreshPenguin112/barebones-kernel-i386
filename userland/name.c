@@ -1,6 +1,6 @@
 #include "../syscall.h"
 
-void _start(void)
+void main(void)
 {
     char name[100];
     syscall(SYSCALL_ANSI_PRINT, "Whats your name? $ ", "magenta", "none");

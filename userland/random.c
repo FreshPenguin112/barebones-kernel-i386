@@ -2,7 +2,7 @@
 #include "../string_utils.h"
 #include <stdint.h>
 
-void _start(void) {
+void main(void) {
     /* 32‑bit unsigned */
     uint32_t u;
     syscall(SYSCALL_RANDOM_U32, &u);

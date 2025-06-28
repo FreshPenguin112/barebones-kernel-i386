@@ -1,7 +1,7 @@
 #include "../syscall.h"
 #include "../string_utils.h"
 
-void _start(void)
+void main(void)
 {
     float seconds = (float)1 / 2; // Convert ms to seconds
     char buf[16];

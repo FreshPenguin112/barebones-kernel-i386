@@ -17,6 +17,10 @@ default_int_handler_asm:
     push %rbx
     push %rax
     sub $8, %rsp         # align stack to 16 bytes
+    # Serial debug: output 'I' for generic interrupt
+    mov $0x49, %al        # 'I'
+    mov $0x3F8, %dx
+    out %al, %dx
     mov $0xDEAD, %rax
     hlt
     add $8, %rsp

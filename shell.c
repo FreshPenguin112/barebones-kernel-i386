@@ -94,6 +94,18 @@ void shell_init(void)
 
 void shell_run(void)
 {
+    // Print and fix stack alignment at shell entry
+    uint64_t rsp;
+    __asm__ volatile ("mov %%rsp, %0" : "=r"(rsp));
+    serial_write_str("[shell_run] rsp: ");
+    serial_write_hex(rsp);
+    serial_write_char('\n');
+    if (rsp & 0xF) {
+        rsp &= ~0xF;
+        __asm__ volatile ("mov %0, %%rsp" :: "r"(rsp));
+        serial_write_str("[shell_run] realigned rsp\n");
+    }
+
     while (1)
     {
         kernel_print_ansi("ice $ ", "cyan", "none");

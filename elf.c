@@ -42,6 +42,8 @@ void elf_exit() {
     user_program_exited = 1;
 }
 
+static uint8_t user_stack[0x4000] __attribute__((aligned(16)));
+
 int elf_run(const char *filename) {
     unsigned int size;
     const char *data = tarfs_cat(filename, &size);
@@ -60,6 +62,12 @@ int elf_run(const char *filename) {
     entry_fn_t entry = (entry_fn_t)ehdr->e_entry;
     elf_exit_callback = elf_exit;
     user_program_exited = 0;
+    // Set up a separate user stack (top of user_stack, minus 8 for call alignment)
+    __asm__ volatile (
+        "mov %[ustack_top], %%rsp\n"
+        : : [ustack_top] "r" (user_stack + sizeof(user_stack) - 8)
+        : "rsp"
+    );
     entry();
     user_program_exited = 1;
     return 0;

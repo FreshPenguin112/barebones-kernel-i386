@@ -1,7 +1,7 @@
 #include "../syscall.h"
 #include "../string_utils.h"
 
-void _start() {
+void main(void) {
     uint32_t n, num1 = 0, num2 = 1, nextNum;
     char buffer[100];
     syscall(SYSCALL_PRINT, "Number of fibonacci numbers to generate? \n");
@@ -32,5 +32,4 @@ void _start() {
         num2 = nextNum;
     }
     syscall(SYSCALL_PRINT, "\n");
-    return;
 }
