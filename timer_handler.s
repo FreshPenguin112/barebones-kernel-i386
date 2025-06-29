@@ -1,8 +1,7 @@
-.section .text
 .global timer_handler_asm
-
+.type timer_handler_asm, @function
 timer_handler_asm:
-    pusha
-    call timer_handler
-    popa
-    iret
+    // Send EOI to PIC
+    movb $0x20, %al
+    out   %al, $0x20
+    iretq

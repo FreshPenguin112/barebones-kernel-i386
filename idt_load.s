@@ -1,5 +1,5 @@
 .global idt_load
 idt_load:
-    movl 4(%esp), %eax    # Load the IDT pointer address from the stack
-    lidt (%eax)           # Load the IDT
+    mov %rdi, %rax      # IDT pointer is in rdi (System V AMD64 ABI)
+    lidt (%rax)         # Load the IDT (10 bytes: 2-byte limit, 8-byte base)
     ret

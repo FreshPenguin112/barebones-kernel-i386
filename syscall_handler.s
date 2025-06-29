@@ -1,31 +1,22 @@
 .section .text
 .global syscall_handler_asm
 
+# x86_64 syscall handler: expects syscall number in rax, args in rdi, rsi, rdx
 syscall_handler_asm:
-    # Save segment registers
-    push %ds
-    push %es
-    push %fs
-    push %gs
-
-    push %eax              # Save syscall number
-    mov $0x10, %ax
-    mov %ax, %ds
-    mov %ax, %es
-    pop %eax               # Restore syscall number
-
-    # Push syscall arguments for C (from userland: eax, ebx, ecx)
-    push %ecx        # arg2
-    push %ebx        # arg1
-    push %eax        # syscall_number
-
+    push %rbp
+    mov %rsp, %rbp
+    # Save registers that may be clobbered
+    push %rdi
+    push %rsi
+    push %rdx
+    # Call C handler: int syscall_handler(uint64_t num, uint64_t arg1, uint64_t arg2)
+    mov %rax, %rdi   # syscall number
+    mov %rdi, %rsi   # arg1
+    mov %rsi, %rdx   # arg2
     call syscall_handler
-    add $12, %esp    # Clean up stack
-
-    # Restore segment registers
-    pop %gs
-    pop %fs
-    pop %es
-    pop %ds
-
-    iret
+    # Restore registers
+    pop %rdx
+    pop %rsi
+    pop %rdi
+    pop %rbp
+    ret

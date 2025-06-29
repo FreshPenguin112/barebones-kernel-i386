@@ -9,6 +9,9 @@
 #include "string_utils.h"
 #include "pit.h"
 #include "io.h"
+#include "limine.h"
+#include <stdint.h>
+extern struct limine_framebuffer_request limine_framebuffer_request;
 
 // -----------------------------------------------------------------------------
 // VGA text‐mode state
@@ -340,9 +343,8 @@ void syscall_handler(int syscall_number, void *arg1, void *arg2, void *arg3)
 }
 
 // Set up the syscall interrupt (int 0x80)
-void setup_syscalls()
-{
-    idt_set_gate(0x80, (uint32_t)syscall_handler_asm, 0x08, 0x8E);
+void setup_syscalls(void) {
+    idt_set_gate(0x80, (uintptr_t)syscall_handler_asm, 0x08, 0x8E, 0);
 }
 
 // -----------------------------------------------------------------------------
@@ -362,26 +364,75 @@ void timer_handler(void)
 // -----------------------------------------------------------------------------
 void kernel_main(void)
 {
+    serial_write_string("[DBG] kernel_main: framebuffer demo\r\n");
+    struct limine_framebuffer_response *fb_resp = (struct limine_framebuffer_response*)limine_framebuffer_request.response;
+    if (fb_resp && fb_resp->framebuffer_count > 0) {
+        struct limine_framebuffer *fb = fb_resp->framebuffers[0];
+        uint32_t *fb_ptr = (uint32_t*)fb->address;
+        for (uint64_t y = 0; y < fb->height; ++y) {
+            for (uint64_t x = 0; x < fb->width; ++x) {
+                fb_ptr[y * (fb->pitch / 4) + x] = 0x0000FF;
+            }
+        }
+        // Draw white text (very simple, just a few pixels)
+        // H
+        fb_ptr[10 * (fb->pitch / 4) + 10] = 0xFFFFFF;
+        fb_ptr[11 * (fb->pitch / 4) + 10] = 0xFFFFFF;
+        fb_ptr[12 * (fb->pitch / 4) + 10] = 0xFFFFFF;
+        fb_ptr[11 * (fb->pitch / 4) + 11] = 0xFFFFFF;
+        fb_ptr[10 * (fb->pitch / 4) + 12] = 0xFFFFFF;
+        fb_ptr[11 * (fb->pitch / 4) + 12] = 0xFFFFFF;
+        fb_ptr[12 * (fb->pitch / 4) + 12] = 0xFFFFFF;
+        // (etc. for "Hello Limine!" or just a few more dots)
+    }
+    serial_write_string("[DBG] kernel_main: serial_init\r\n");
     serial_init();
+    serial_write_string("[DBG] kernel_main: term_init\r\n");
     term_init();
-    ansi_clearhome();
-
-    idt_init();                                                // 1. Set up IDT
-    pit_init(1000);                                            // 2. Set up PIT
-    idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E); // 3. IRQ0
-    setup_syscalls();                                          // 4. Syscalls
-
-    asm volatile("sti"); // 5. Enable interrupts
-
-    // 6. Everything is ready, start shell
+    //ansi_clearhome();
+    serial_write_string("[DBG] kernel_main: idt_init\r\n");
+    idt_init();
+    serial_write_string("[DBG] kernel_main: remap_pic\r\n");
+    remap_pic();
+    serial_write_string("[DBG] kernel_main: pit_init\r\n");
+    pit_init(1000);
+    serial_write_string("[DBG] kernel_main: idt_set_gate(32)\r\n");
+    idt_set_gate(32, (uintptr_t)timer_handler_asm, 0x08, 0x8E, 0);
+    serial_write_string("[DBG] kernel_main: setup_syscalls\r\n");
+    setup_syscalls();
+    serial_write_string("[DBG] kernel_main: sti\r\n");
+    asm volatile("sti");
+    serial_write_string("[DBG] kernel_main: tarfs_init\r\n");
     extern unsigned char initfs_tar[];
     tarfs_init((const char *)initfs_tar);
-
+    serial_write_string("[DBG] kernel_main: shell_init\r\n");
     shell_init();
+    serial_write_string("[DBG] kernel_main: shell_run\r\n");
     shell_run();
-
     for (;;)
     {
         asm volatile("hlt");
     }
+}
+
+// Limine framebuffer request structure (must be global and not static)
+__attribute__((used)) __attribute__((section(".limine_reqs")))
+struct limine_framebuffer_request limine_framebuffer_request = {
+    .id = {0x3e7e279702be32af, 0xca1c4f3bd1280cee, 0xe1cb0fc25f46ea3d, 0x447b7e6a740fe466},
+    .revision = 0,
+    .response = 0
+};
+
+// Remap PIC to 0x20–0x2F (vectors 32–47)
+static void remap_pic(void) {
+    outb(0x20, 0x11);
+    outb(0xA0, 0x11);
+    outb(0x21, 0x20); // Master PIC vector offset
+    outb(0xA1, 0x28); // Slave PIC vector offset
+    outb(0x21, 0x04);
+    outb(0xA1, 0x02);
+    outb(0x21, 0x01);
+    outb(0xA1, 0x01);
+    outb(0x21, 0x0);
+    outb(0xA1, 0x0);
 }
