@@ -9,6 +9,7 @@
 #include "string_utils.h"
 #include "pit.h"
 #include "io.h"
+#include "framebuffer.h"
 
 // -----------------------------------------------------------------------------
 // VGA text‐mode state
@@ -50,11 +51,6 @@ void serial_write_char(char c) {
 }
 */
 
-void serial_write_str(const char *s)
-{
-    for (size_t i = 0; s[i]; i++)
-        serial_write_char(s[i]);
-}
 
 // -----------------------------------------------------------------------------
 // VGA text‐mode routines
@@ -357,31 +353,110 @@ void timer_handler(void)
     outb(0x20, 0x20);
 }
 
+// Wait for a given number of milliseconds using PIT timer_ticks
+static void wait_milliseconds(uint32_t ms) {
+    uint32_t start = timer_ticks;
+    while ((timer_ticks - start) < ms) {
+        asm volatile("hlt");
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Kernel entry point
 // -----------------------------------------------------------------------------
 void kernel_main(void)
 {
     serial_init();
-    term_init();
+    // term_init();
     ansi_clearhome();
 
-    idt_init();                                                // 1. Set up IDT
-    pit_init(1000);                                            // 2. Set up PIT
-    idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E); // 3. IRQ0
-    setup_syscalls();                                          // 4. Syscalls
+    idt_init();
+    pit_init(1000);
+    idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E);
+    setup_syscalls();
+    asm volatile("sti");
 
-    asm volatile("sti"); // 5. Enable interrupts
-
-    // 6. Everything is ready, start shell
     extern unsigned char initfs_tar[];
     tarfs_init((const char *)initfs_tar);
-
-    shell_init();
-    shell_run();
-
-    for (;;)
-    {
-        asm volatile("hlt");
+    struct framebuffer_info fb;
+    framebuffer_set_mode(800, 600, 32); // Set mode before detection
+    framebuffer_detect(&fb);
+    if (!fb.found) {
+        serial_write_str("No QEMU framebuffer detected.");
+        while (1) {
+            asm volatile("hlt"); // Halt if no framebuffer found
+        }
+    }
+    // --- Non-blocking framebuffer animation loop: bouncing ball demo ---
+    uint32_t ball_x = 100, ball_y = 100;
+    int ball_dx = 2, ball_dy = 1;
+    const uint32_t ball_radius = 30;
+    // Draw static checkerboard background once
+    if (fb.width > 0 && fb.height > 0 && fb.bpp == 32) {
+        uint32_t *fb_ptr = (uint32_t *)0xfd000000;
+        uint32_t pixels_per_row = fb.pitch / 4;
+        for (uint32_t y = 0; y < fb.height; y++) {
+            for (uint32_t x = 0; x < fb.width; x++) {
+                int check = ((x / 40) % 2) ^ ((y / 40) % 2);
+                uint32_t color = check ? 0xCCCCCC : 0x222222;
+                fb_ptr[y * pixels_per_row + x] = color;
+            }
+        }
+    }
+    // Run animation for a fixed number of frames, then start shell
+    uint32_t prev_x = ball_x, prev_y = ball_y;
+    while (1) {
+        if (fb.width > 0 && fb.height > 0 && fb.bpp == 32) {
+            uint32_t *fb_ptr = (uint32_t *)0xfd000000;
+            uint32_t pixels_per_row = fb.pitch / 4;
+            // Compute new position
+            int next_x = ball_x + ball_dx;
+            int next_y = ball_y + ball_dy;
+            // Check for collision and reverse direction if needed
+            if ((int)next_x - (int)ball_radius < 0 || (int)next_x + (int)ball_radius >= (int)fb.width) ball_dx = -ball_dx;
+            if ((int)next_y - (int)ball_radius < 0 || (int)next_y + (int)ball_radius >= (int)fb.height) ball_dy = -ball_dy;
+            // Update position after collision check
+            next_x = ball_x + ball_dx;
+            next_y = ball_y + ball_dy;
+            // Erase only pixels that were in the previous ball but not in the new ball
+            int min_x = prev_x - ball_radius;
+            int max_x = prev_x + ball_radius;
+            int min_y = prev_y - ball_radius;
+            int max_y = prev_y + ball_radius;
+            for (int y = min_y; y <= max_y; y++) {
+                if (y < 0 || y >= (int)fb.height) continue;
+                for (int x = min_x; x <= max_x; x++) {
+                    if (x < 0 || x >= (int)fb.width) continue;
+                    int in_prev = ((x - (int)prev_x)*(x - (int)prev_x) + (y - (int)prev_y)*(y - (int)prev_y)) <= (int)(ball_radius*ball_radius);
+                    int in_new = ((x - next_x)*(x - next_x) + (y - next_y)*(y - next_y)) <= (int)(ball_radius*ball_radius);
+                    if (in_prev && !in_new) {
+                        int check = ((x / 40) % 2) ^ ((y / 40) % 2);
+                        uint32_t color = check ? 0xCCCCCC : 0x222222;
+                        fb_ptr[y * pixels_per_row + x] = color;
+                    }
+                }
+            }
+            // Draw new ball
+            for (int dy = -((int)ball_radius); dy <= (int)ball_radius; dy++) {
+                int y = next_y + dy;
+                if (y < 0 || y >= (int)fb.height) continue;
+                for (int dx = -((int)ball_radius); dx <= (int)ball_radius; dx++) {
+                    int x = next_x + dx;
+                    if (x < 0 || x >= (int)fb.width) continue;
+                    if (dx*dx + dy*dy <= (int)(ball_radius*ball_radius)) {
+                        fb_ptr[y * pixels_per_row + x] = 0xFF00FF;
+                    }
+                }
+            }
+            // Update prev and ball positions
+            prev_x = next_x;
+            prev_y = next_y;
+            ball_x = next_x;
+            ball_y = next_y;
+        }
+        // Run one shell step per frame
+        shell_run_step();
+        // Wait for 10ms per frame for smooth animation
+        wait_milliseconds(10);
     }
 }

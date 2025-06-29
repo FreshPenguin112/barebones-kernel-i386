@@ -274,3 +274,176 @@ void shell_run(void)
         }
     }
 }
+
+// State for cooperative shell
+static int shell_initialized = 0;
+static int shell_prompted = 0;
+
+void shell_run_step(void)
+{
+    if (!shell_initialized)
+    {
+        shell_init();
+        shell_initialized = 1;
+        shell_prompted = 0;
+    }
+    if (!shell_prompted)
+    {
+        kernel_print_ansi("ice $ ", "cyan", "none");
+        input_len = 0;
+        cursor_pos = 0;
+        input_buffer[0] = 0;
+        history_view = -1;
+        shell_prompted = 1;
+    }
+    if (serial_has_received())
+    {
+        char c = serial_read_char();
+        // Handle Ctrl+D (ASCII 4)
+        if (c == 4)
+        {
+            qemu_halt_exit(0);
+        }
+        // Handle escape sequences (arrow keys)
+        if (c == '\033')
+        {
+            if (serial_has_received() && serial_read_char() == '[')
+            {
+                char dir = 0;
+                if (serial_has_received())
+                    dir = serial_read_char();
+                if (dir == 'A')
+                { // Up arrow
+                    if (history_count > 0)
+                    {
+                        if (history_view == -1)
+                            history_view = history_count - 1;
+                        else if (history_view > 0)
+                            history_view--;
+                        set_input(history[history_view]);
+                    }
+                }
+                else if (dir == 'B')
+                { // Down arrow
+                    if (history_count > 0 && history_view != -1)
+                    {
+                        if (history_view < history_count - 1)
+                        {
+                            history_view++;
+                            set_input(history[history_view]);
+                        }
+                        else
+                        {
+                            history_view = -1;
+                            set_input("");
+                        }
+                    }
+                }
+                else if (dir == 'C')
+                { // Right arrow
+                    if (cursor_pos < input_len)
+                    {
+                        kernel_print("\033[C");
+                        cursor_pos++;
+                    }
+                }
+                else if (dir == 'D')
+                { // Left arrow
+                    if (cursor_pos > 0)
+                    {
+                        kernel_print("\033[D");
+                        cursor_pos--;
+                    }
+                }
+            }
+            return;
+        }
+        // Handle backspace (ASCII 8 or 127)
+        if (c == 8 || c == 127)
+        {
+            if (cursor_pos > 0 && input_len > 0)
+            {
+                for (int j = cursor_pos - 1; j < input_len - 1; j++)
+                    input_buffer[j] = input_buffer[j + 1];
+                input_len--;
+                cursor_pos--;
+                input_buffer[input_len] = 0;
+                redraw_input();
+            }
+            return;
+        }
+        // Handle enter
+        if (c == '\n' || c == '\r')
+        {
+            kernel_print("\n");
+            input_buffer[input_len] = 0;
+            // Add to history if not empty and not duplicate of last
+            if (input_len > 0 && (history_count == 0 || strcmp(input_buffer, history[(history_count - 1) % HISTORY_SIZE]) != 0))
+            {
+                strcpy(history[history_count % HISTORY_SIZE], input_buffer);
+                history_count++;
+                if (history_count > HISTORY_SIZE)
+                    history_count = HISTORY_SIZE;
+            }
+            // Parse and execute command
+            int argc = parse_input(input_buffer);
+            int redirect = 0;
+            char *out_file = 0;
+            for (int i = 0; i < argc; i++)
+            {
+                if (strcmp(argv[i], ">") == 0 && i + 1 < argc)
+                {
+                    redirect = 1;
+                    out_file = argv[i + 1];
+                    argv[i] = 0;
+                    argc = i;
+                    break;
+                }
+            }
+            if (argc > 0)
+            {
+                command_t *cmd = find_command(argv[0]);
+                if (cmd)
+                {
+                    if (redirect && strcmp(argv[0], "echo") == 0)
+                    {
+                        char buf[256];
+                        int pos = 0;
+                        for (int i = 1; i < argc && pos < 255; i++)
+                        {
+                            for (int j = 0; argv[i][j] && pos < 255; j++)
+                                buf[pos++] = argv[i][j];
+                            if (i < argc - 1 && pos < 255)
+                                buf[pos++] = ' ';
+                        }
+                        buf[pos] = 0;
+                        tarfs_write(out_file, buf, pos);
+                    }
+                    else
+                    {
+                        cmd->func(argc, argv);
+                    }
+                }
+                else
+                {
+                    kernel_print_ansi("Unknown command: ", "red", "none");
+                    kernel_print_ansi(argv[0], "red", "none");
+                    kernel_print("\n");
+                }
+            }
+            shell_prompted = 0; // Prompt for next command
+            return;
+        }
+        // Printable character
+        if (c >= 32 && c <= 126 && input_len < MAX_INPUT_LENGTH - 1)
+        {
+            for (int j = input_len; j > cursor_pos; j--)
+                input_buffer[j] = input_buffer[j - 1];
+            input_buffer[cursor_pos] = c;
+            input_len++;
+            cursor_pos++;
+            input_buffer[input_len] = 0;
+            redraw_input();
+        }
+    }
+}

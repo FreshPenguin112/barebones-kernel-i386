@@ -37,3 +37,36 @@ void serial_write_char(char c)
         ;
     outb(COM1, c);
 }
+
+void serial_print_hex(unsigned int value) {
+    char buf[9];
+    buf[8] = '\0';
+    for (int i = 7; i >= 0; i--) {
+        unsigned int nibble = value & 0xF;
+        buf[i] = (nibble < 10) ? ('0' + nibble) : ('A' + nibble - 10);
+        value >>= 4;
+    }
+    serial_write_str(buf);
+}
+
+void serial_print_dec(unsigned int value) {
+    char buf[11];
+    int i = 10;
+    buf[i--] = '\0';
+    if (value == 0) {
+        buf[i] = '0';
+        serial_write_str(&buf[i]);
+        return;
+    }
+    while (value > 0 && i >= 0) {
+        buf[i--] = '0' + (value % 10);
+        value /= 10;
+    }
+    serial_write_str(&buf[i+1]);
+}
+
+void serial_write_str(const char *s)
+{
+    for (uint32_t i = 0; s[i]; i++)
+        serial_write_char(s[i]);
+}
