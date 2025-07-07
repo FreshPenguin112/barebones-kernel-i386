@@ -1,1 +1,1 @@
-qemu/qemu-system-i386 -kernel mykernel.elf -device isa-debug-exit,iobase=0x501,iosize=0x04 -no-reboot 
+qemu/qemu-system-i386 -kernel mykernel.elf -device isa-debug-exit,iobase=0x501,iosize=0x04 -no-reboot -display default,show-cursor=on

@@ -10,6 +10,14 @@
 #include "pit.h"
 #include "io.h"
 #include "framebuffer.h"
+#include "font8x8_basic.h"
+
+#define MAX_WINDOWS 8
+#define WINDOW_TITLE_HEIGHT 24
+#define WINDOW_BORDER 2
+#define WINDOW_MIN_WIDTH 120
+#define WINDOW_MIN_HEIGHT 60
+#define CLOSE_BTN_SIZE 16
 
 // -----------------------------------------------------------------------------
 // VGA text‐mode state
@@ -362,23 +370,505 @@ static void wait_milliseconds(uint32_t ms) {
 }
 
 // -----------------------------------------------------------------------------
+// PS/2 Keyboard and Mouse support (basic)
+// -----------------------------------------------------------------------------
+#define PS2_DATA_PORT 0x60
+#define PS2_STATUS_PORT 0x64
+#define PS2_CMD_PORT 0x64
+
+// Wait for PS/2 controller input buffer to be clear
+static void ps2_wait_input_clear(void) {
+    for (int i = 0; i < 10000; i++) {
+        if (!(inb(PS2_STATUS_PORT) & 0x02)) return;
+    }
+}
+// Wait for PS/2 controller output buffer to be full
+static void ps2_wait_output_full(void) {
+    for (int i = 0; i < 10000; i++) {
+        if (inb(PS2_STATUS_PORT) & 0x01) return;
+    }
+}
+// Send a command to the PS/2 keyboard and wait for ACK
+static void ps2_keyboard_send(uint8_t cmd) {
+    ps2_wait_input_clear();
+    outb(PS2_DATA_PORT, cmd);
+    ps2_wait_output_full();
+    uint8_t resp = inb(PS2_DATA_PORT);
+    if (resp != 0xFA) {
+        // Optionally: handle resend (0xFE) or error
+    }
+}
+
+
+
+// PS/2 controller init: enable devices and interrupts
+void ps2_init(void) {
+    // Clear output buffer
+    while (inb(PS2_STATUS_PORT) & 0x01) {
+        (void)inb(PS2_DATA_PORT);
+    }
+    // Enable keyboard (first PS/2 port)
+    outb(PS2_CMD_PORT, 0xAE); // Enable keyboard
+    // Enable mouse (second PS/2 port)
+    outb(PS2_CMD_PORT, 0xA8); // Enable mouse
+    // Set config byte: enable IRQ1 and IRQ12
+    ps2_wait_input_clear();
+    outb(PS2_CMD_PORT, 0x20); // Read config byte
+    ps2_wait_output_full();
+    uint8_t config = inb(PS2_DATA_PORT);
+    config |= 0x03; // Enable IRQ1 and IRQ12
+    ps2_wait_input_clear();
+    outb(PS2_CMD_PORT, 0x60); // Write config byte
+    ps2_wait_input_clear();
+    outb(PS2_DATA_PORT, config);
+    // Enable mouse device
+    outb(PS2_CMD_PORT, 0xD4);
+    outb(PS2_DATA_PORT, 0xF4); // Enable data reporting
+    // Enable keyboard scanning
+    ps2_keyboard_send(0xF4); // Enable scanning
+}
+
+// -----------------------------------------------------------------------------
+// PIC initialization and remapping
+// -----------------------------------------------------------------------------
+static void pic_remap(void) {
+    // Start initialization
+    outb(0x20, 0x11);
+    outb(0xA0, 0x11);
+    // Set vector offset
+    outb(0x21, 0x20); // Master PIC: 0x20 (32)
+    outb(0xA1, 0x28); // Slave PIC: 0x28 (40)
+    // Tell Master PIC there is a slave at IRQ2 (0000 0100)
+    outb(0x21, 0x04);
+    // Tell Slave PIC its cascade identity (0000 0010)
+    outb(0xA1, 0x02);
+    // Set 8086/88 mode
+    outb(0x21, 0x01);
+    outb(0xA1, 0x01);
+    // Unmask IRQ0 (timer) and IRQ1 (keyboard) only
+    outb(0x21, 0xFC); // 1111 1100: IRQ0 and IRQ1 enabled
+    outb(0xA1, 0xEF); // 1110 1111: only IRQ12 enabled
+}
+
+extern void keyboard_handler_asm(void);
+extern void mouse_handler_asm(void);
+
+
+// -----------------------------------------------------------------------------
+// Window manager (remade, minimal, clean)
+// Function declarations for use in other translation units
+// -----------------------------------------------------------------------------
+
+// --- Minimal, clean window manager implementation ---
+#define WM_MAX_WINDOWS 10000
+#define WM_TITLE_HEIGHT 24
+#define WM_BORDER 2
+#define WM_MIN_WIDTH 120
+#define WM_MIN_HEIGHT 60
+#define WM_CLOSE_SIZE 16
+
+struct WM_Window {
+    int x, y, w, h;
+    int dragging;
+    int drag_dx, drag_dy;
+    int alive;
+};
+static struct WM_Window WM_windows[WM_MAX_WINDOWS];
+static int WM_window_count = 0;
+static int WM_mouse_x = 0, WM_mouse_y = 0;
+static int WM_mouse_left = 0, WM_mouse_left_prev = 0;
+static char WM_key = 0;
+
+// Rectangle helpers (move these above WM_draw_window)
+static void WM_fill_rect(uint32_t *fb, int fbw, int fbh, int x, int y, int w, int h, uint32_t color) {
+    for (int j = 0; j < h; j++) {
+        int py = y + j;
+        if (py < 0 || py >= fbh) continue;
+        for (int i = 0; i < w; i++) {
+            int px = x + i;
+            if (px < 0 || px >= fbw) continue;
+            fb[py * fbw + px] = color | 0xFF000000;
+        }
+    }
+}
+static void WM_draw_rect(uint32_t *fb, int fbw, int fbh, int x, int y, int w, int h, uint32_t color) {
+    for (int i = 0; i < w; i++) {
+        if (y >= 0 && y < fbh && x + i >= 0 && x + i < fbw)
+            fb[y * fbw + (x + i)] = color | 0xFF000000;
+        if (y + h - 1 >= 0 && y + h - 1 < fbh && x + i >= 0 && x + i < fbw)
+            fb[(y + h - 1) * fbw + (x + i)] = color | 0xFF000000;
+    }
+    for (int j = 0; j < h; j++) {
+        if (x >= 0 && x < fbw && y + j >= 0 && y + j < fbh)
+            fb[(y + j) * fbw + x] = color | 0xFF000000;
+        if (x + w - 1 >= 0 && x + w - 1 < fbw && y + j >= 0 && y + j < fbh)
+            fb[(y + j) * fbw + (x + w - 1)] = color | 0xFF000000;
+    }
+}
+
+static void WM_draw_char(uint32_t *fb, int fbw, int fbh, int x, int y, char c, uint32_t color) {
+    if (c < 0 || c > 127) return;
+    for (int row = 0; row < 8; row++) {
+        uint8_t bits = font8x8_basic[(int)c][row];
+        for (int col = 0; col < 8; col++) {
+            if ((bits >> col) & 1) {
+                int px = x + col * 2, py = y + row * 2;
+                for (int dy = 0; dy < 2; dy++) {
+                    for (int dx = 0; dx < 2; dx++) {
+                        int fx = px + dx, fy = py + dy;
+                        if (fx >= 0 && fx < fbw && fy >= 0 && fy < fbh)
+                            fb[fy * fbw + fx] = color | 0xFF000000;
+                    }
+                }
+            }
+        }
+    }
+}
+// Draw text at double size
+static void WM_draw_text(uint32_t *fb, int fbw, int fbh, int x, int y, const char *s, uint32_t color) {
+    for (int i = 0; s[i]; i++)
+        WM_draw_char(fb, fbw, fbh, x + i * 16, y, s[i], color);
+}
+// Make the mouse cursor much larger and bolder
+static void WM_draw_mouse(uint32_t *fb, int fbw, int fbh, int mx, int my) {
+    // White outline crosshair (thicker)
+    for (int i = -15; i <= 15; i++) {
+        for (int t = -2; t <= 2; t++) {
+            int px = mx + i, py = my + t;
+            if (px >= 0 && px < fbw && py >= 0 && py < fbh)
+                fb[py * fbw + px] = 0xFFFFFFFF;
+            px = mx + t, py = my + i;
+            if (px >= 0 && px < fbw && py >= 0 && py < fbh)
+                fb[py * fbw + px] = 0xFFFFFFFF;
+        }
+    }
+    // Black crosshair (inside white)
+    for (int i = -11; i <= 11; i++) {
+        for (int t = -1; t <= 1; t++) {
+            int px = mx + i, py = my + t;
+            if (px >= 0 && px < fbw && py >= 0 && py < fbh)
+                fb[py * fbw + px] = 0x000000;
+            px = mx + t, py = my + i;
+            if (px >= 0 && px < fbw && py >= 0 && py < fbh)
+                fb[py * fbw + px] = 0x000000;
+        }
+    }
+    // Large white center square
+    for (int dy = -4; dy <= 4; dy++) {
+        for (int dx = -4; dx <= 4; dx++) {
+            int px = mx + dx, py = my + dy;
+            if (px >= 0 && px < fbw && py >= 0 && py < fbh)
+                fb[py * fbw + px] = 0xFFFFFFFF;
+        }
+    }
+}
+// Draw the close button (move above WM_draw_window)
+static void WM_draw_close(uint32_t *fb, int fbw, int fbh, int x, int y) {
+    WM_fill_rect(fb, fbw, fbh, x, y, WM_CLOSE_SIZE, WM_CLOSE_SIZE, 0xCC2222);
+    for (int i = 3; i < WM_CLOSE_SIZE - 3; i++) {
+        int px1 = x + i, py1 = y + i;
+        int px2 = x + WM_CLOSE_SIZE - 1 - i, py2 = y + i;
+        if (px1 >= x && px1 < x + WM_CLOSE_SIZE && py1 >= y && py1 < y + WM_CLOSE_SIZE)
+            fb[py1 * fbw + px1] = 0xFFFFFF;
+        if (px2 >= x && px2 < x + WM_CLOSE_SIZE && py2 >= y && py2 < y + WM_CLOSE_SIZE)
+            fb[py2 * fbw + px2] = 0xFFFFFF;
+    }
+}
+static void WM_draw_window(uint32_t *fb, int fbw, int fbh, struct WM_Window *win, int focused) {
+    // Draw a highly visible yellow window background
+    WM_fill_rect(fb, fbw, fbh, win->x, win->y, win->w, win->h, 0xFFFFFF);
+    // Draw a black border
+    WM_draw_rect(fb, fbw, fbh, win->x, win->y, win->w, win->h, 0x000000);
+    // Draw window title text
+    WM_draw_text(fb, fbw, fbh, win->x + 8, win->y + 4, "Hello, World!", 0x000000);
+    // Draw a magenta line under the title text to indicate draggable area
+    int line_y = win->y + 24; // Just below the text (text is at y+4, double size = 16px, so y+20~y+24)
+    int line_x0 = win->x + 8;
+    int line_x1 = win->x + win->w - 8;
+    if (line_x1 > line_x0) {
+        for (int lx = line_x0; lx < line_x1; lx++) {
+            for (int t = 0; t < 2; t++) { // 2px thick
+                int ly = line_y + t;
+                if (lx >= 0 && lx < fbw && ly >= 0 && ly < fbh)
+                    fb[ly * fbw + lx] = 0x000000; // Black line
+            }
+        }
+    }
+    // Draw close button
+    WM_draw_close(fb, fbw, fbh, win->x + win->w - WM_CLOSE_SIZE - 4, win->y + 4);
+}
+static int WM_hit_title(struct WM_Window *win, int mx, int my) {
+    return mx >= win->x && mx < win->x + win->w && my >= win->y && my < win->y + WM_TITLE_HEIGHT;
+}
+static int WM_hit_close(struct WM_Window *win, int mx, int my) {
+    int bx = win->x + win->w - WM_CLOSE_SIZE - 4;
+    int by = win->y + 4;
+    return mx >= bx && mx < bx + WM_CLOSE_SIZE && my >= by && my < by + WM_CLOSE_SIZE;
+}
+static void WM_bring_front(int idx) {
+    if (idx < 0 || idx >= WM_window_count) return;
+    struct WM_Window tmp = WM_windows[idx];
+    for (int i = idx; i < WM_window_count - 1; i++)
+        WM_windows[i] = WM_windows[i + 1];
+    WM_windows[WM_window_count - 1] = tmp;
+}
+static void WM_spawn(void) {
+    if (WM_window_count >= WM_MAX_WINDOWS) return;
+    int x = 60 + (WM_window_count * 30) % 400;
+    int y = 60 + (WM_window_count * 30) % 200;
+    int w = WM_MIN_WIDTH + 120;
+    int h = WM_MIN_HEIGHT + 40;
+    // Correct struct initialization: x, y, w, h, dragging, drag_dx, drag_dy, alive
+    WM_windows[WM_window_count++] = (struct WM_Window){x, y, w, h, 0, 0, 0, 1};
+}
+static void WM_remove_closed(void) {
+    int j = 0;
+    for (int i = 0; i < WM_window_count; i++) {
+        if (WM_windows[i].alive)
+            WM_windows[j++] = WM_windows[i];
+    }
+    WM_window_count = j;
+}
+void wm_update_key(char c) { WM_key = c; }
+void wm_clear_keys(void) { WM_key = 0; }
+void wm_update_mouse(int x, int y, int left) {
+    WM_mouse_x = x; WM_mouse_y = y;
+    WM_mouse_left_prev = WM_mouse_left;
+    WM_mouse_left = left;
+}
+void window_manager_mainloop(void) {
+    extern struct framebuffer_info fb;
+    uint32_t *fb_ptr = fb.addr;
+    int fbw = (fb.width > 0) ? fb.width : 800;
+    int fbh = (fb.height > 0) ? fb.height : 600;
+    // Allocate a mask buffer (1 byte per pixel)
+    static uint8_t mask_static[1920 * 1080]; // Support up to 1920x1080, adjust as needed
+    uint8_t *mask = mask_static;
+
+    char wbuf[12];
+    char hbuf[12];
+
+    // --- Main loop ---
+    int prev_mouse_x = -1, prev_mouse_y = -1;
+    int prev_window_count = -1;
+    unsigned int prev_window_hash = 0;
+    while (1) {
+        // Compute window state hash
+        unsigned int window_hash = WM_window_count;
+        for (int i = 0; i < WM_window_count; i++) {
+            window_hash ^= (WM_windows[i].x * 31 + WM_windows[i].y * 37 + WM_windows[i].w * 41 + WM_windows[i].h * 43 + WM_windows[i].alive * 47);
+        }
+        int redraw = 0;
+        if (WM_mouse_x != prev_mouse_x || WM_mouse_y != prev_mouse_y) redraw = 1;
+        if (WM_window_count != prev_window_count) redraw = 1;
+        if (window_hash != prev_window_hash) redraw = 1;
+        // Only redraw if something changed
+        if (redraw) {
+            // 1. Clear mask to 0
+            for (int i = 0; i < fbw * fbh; i++) mask[i] = 0;
+            // 2. Draw windows and set mask for covered pixels
+            int focused = WM_window_count - 1;
+            for (int i = 0; i < WM_window_count; i++) {
+                if (WM_windows[i].alive) {
+                    struct WM_Window *win = &WM_windows[i];
+                    WM_draw_window(fb_ptr, fbw, fbh, win, i == focused);
+                    int wx0 = win->x, wy0 = win->y, wx1 = win->x + win->w, wy1 = win->y + win->h;
+                    if (wx0 < 0) wx0 = 0;
+                    if (wy0 < 0) wy0 = 0;
+                    if (wx1 > fbw) wx1 = fbw;
+                    if (wy1 > fbh) wy1 = fbh;
+                    for (int y = wy0; y < wy1; y++) {
+                        for (int x = wx0; x < wx1; x++) {
+                            mask[y * fbw + x] = 1;
+                        }
+                    }
+                }
+            }
+            // 3. Erase only uncovered regions (mask==0)
+            for (int i = 0; i < fbw * fbh; i++) {
+                if (mask[i] == 0) fb_ptr[i] = 0xFF222222; // BGRA, force alpha
+            }
+            // 4. Draw mouse cursor on top
+            WM_draw_mouse(fb_ptr, fbw, fbh, WM_mouse_x, WM_mouse_y);
+        }
+        // Save previous state
+        prev_mouse_x = WM_mouse_x;
+        prev_mouse_y = WM_mouse_y;
+        prev_window_count = WM_window_count;
+        prev_window_hash = window_hash;
+
+        // Only spawn on key press transition (debounce)
+        static char prev_key = 0;
+        if (WM_key == 'n' && prev_key != 'n') { WM_spawn(); }
+        if (WM_key == 'x' && prev_key != 'x') {
+            for (int i = 0; i < WM_window_count; i++) {
+                WM_windows[i].alive = 0; // Close all windows
+            }
+        }
+        // Spawn as many windows as possible with 'a' key
+        if (WM_key == 'a' && prev_key != 'a') {
+            int to_spawn = WM_MAX_WINDOWS - WM_window_count;
+            for (int i = 0; i < to_spawn; i++) {
+                WM_spawn();
+            }
+        }
+        prev_key = WM_key;
+        wm_clear_keys();
+        for (int i = WM_window_count - 1; i >= 0; i--) {
+            struct WM_Window *win = &WM_windows[i];
+            if (!win->alive) continue;
+            if (WM_mouse_left && !WM_mouse_left_prev && WM_hit_close(win, WM_mouse_x, WM_mouse_y)) {
+                win->alive = 0;
+                break;
+            }
+            if (WM_mouse_left && !WM_mouse_left_prev && WM_hit_title(win, WM_mouse_x, WM_mouse_y)) {
+                win->dragging = 1;
+                win->drag_dx = WM_mouse_x - win->x;
+                win->drag_dy = WM_mouse_y - win->y;
+                WM_bring_front(i);
+                break;
+            }
+            if (!WM_mouse_left && win->dragging) {
+                win->dragging = 0;
+            }
+            if (win->dragging && WM_mouse_left) {
+                win->x = WM_mouse_x - win->drag_dx;
+                win->y = WM_mouse_y - win->drag_dy;
+                if (win->x < 0) win->x = 0;
+                if (win->y < 0) win->y = 0;
+                if (win->x + win->w > fbw) win->x = fbw - win->w;
+                if (win->y + win->h > fbh) win->y = fbh - win->h;
+            }
+        }
+        WM_remove_closed();
+        if (WM_window_count == 0) {
+            WM_spawn();
+        }
+        shell_run_step(); // Run shell step to handle commands
+        wait_milliseconds(10);
+    }
+}
+
+// Patch keyboard/mouse handlers to update window manager state
+// (Call these from the respective handlers)
+// In keyboard_handler, after determining 'c':
+//     if (c && c < 128 && c > 32) {
+//         wm_update_key(c);
+//     }
+// In mouse_handler, after updating mouse_x, mouse_y:
+//     int left = (flags & 0x01) ? 1 : 0;
+//     wm_update_mouse(mouse_x, mouse_y, left);
+// At end of keyboard_handler, clear keys:
+//     wm_clear_keys();
+
+// Keyboard IRQ1 handler (C)
+void keyboard_handler(void) {
+    static int extended = 0;
+    uint8_t scancode = inb(PS2_DATA_PORT);
+    // Ignore special responses
+    if (scancode == 0xFA || scancode == 0xFE || scancode == 0x00 || scancode == 0xAA) {
+        outb(0x20, 0x20);
+        return;
+    }
+    if (scancode == 0xE0 || scancode == 0xE1) {
+        extended = scancode;
+        outb(0x20, 0x20);
+        return;
+    }
+    // Ignore break codes (key release)
+    if (scancode & 0x80) {
+        outb(0x20, 0x20);
+        return;
+    }
+    // Only handle make codes (key press)
+    static const char scancode_map[200] = {
+        0,27,'1','2','3','4','5','6','7','8','9','0','-','=',8,'\t',
+        'q','w','e','r','t','y','u','i','o','p','[',']','\n',0,'a','s',
+        'd','f','g','h','j','k','l',';','\'','`',0,'\\','z','x','c','v',
+        'b','n','m',',','.','/',0,'*',0,' ',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    };
+    char c = 0;
+    if (!extended) {
+        if (scancode < 128) c = scancode_map[scancode];
+    } else {
+        extended = 0;
+    }
+    if (c && c < 128 && c > 32) {
+        wm_update_key(c);
+    }
+    outb(0x20, 0x20); // Send EOI to PIC
+}
+
+// Mouse IRQ12 handler (C)
+void mouse_handler(void) {
+    static uint8_t packet[3];
+    static int packet_index = 0;
+    static int mouse_x = 400; // Start at center
+    static int mouse_y = 300;
+    extern struct framebuffer_info fb;
+    int screen_w = (fb.width > 0) ? fb.width : 800;
+    int screen_h = (fb.height > 0) ? fb.height : 600;
+    uint8_t data = inb(PS2_DATA_PORT);
+    // Enforce packet sync: first byte must have bit 3 set
+    if (packet_index == 0 && !(data & 0x08)) {
+        outb(0xA0, 0x20); // EOI to slave PIC
+        outb(0x20, 0x20); // EOI to master PIC
+        return;
+    }
+    packet[packet_index++] = data;
+    if (packet_index == 3) {
+        uint8_t flags = packet[0];
+        int dx = (int8_t)packet[1];
+        int dy = (int8_t)packet[2];
+        // Ignore packet if overflow bits set
+        if ((flags & 0x40) || (flags & 0x80)) {
+            packet_index = 0;
+            outb(0xA0, 0x20);
+            outb(0x20, 0x20);
+            return;
+        }
+        dy = -dy;
+        int new_x = mouse_x + dx;
+        int new_y = mouse_y + dy;
+        // Clamp mouse_x and mouse_y to framebuffer bounds
+        if (new_x < 0) new_x = 0;
+        if (new_x >= screen_w) new_x = screen_w - 1;
+        if (new_y < 0) new_y = 0;
+        if (new_y >= screen_h) new_y = screen_h - 1;
+        mouse_x = new_x;
+        mouse_y = new_y;
+        int left = (flags & 0x01) ? 1 : 0;
+        wm_update_mouse(mouse_x, mouse_y, left);
+        packet_index = 0;
+    }
+    outb(0xA0, 0x20);
+    outb(0x20, 0x20);
+}
+
+// -----------------------------------------------------------------------------
 // Kernel entry point
 // -----------------------------------------------------------------------------
+struct framebuffer_info fb;
+
 void kernel_main(void)
 {
     serial_init();
     // term_init();
     ansi_clearhome();
 
+    pic_remap();
     idt_init();
     pit_init(1000);
     idt_set_gate(32, (uint32_t)timer_handler_asm, 0x08, 0x8E);
     setup_syscalls();
+    // Register keyboard and mouse handlers
+    idt_set_gate(33, (uint32_t)keyboard_handler_asm, 0x08, 0x8E); // IRQ1
+    idt_set_gate(44, (uint32_t)mouse_handler_asm, 0x08, 0x8E);    // IRQ12
+    ps2_init();
     asm volatile("sti");
 
     extern unsigned char initfs_tar[];
     tarfs_init((const char *)initfs_tar);
-    struct framebuffer_info fb;
     framebuffer_set_mode(800, 600, 32); // Set mode before detection
     framebuffer_detect(&fb);
     if (!fb.found) {
@@ -387,76 +877,6 @@ void kernel_main(void)
             asm volatile("hlt"); // Halt if no framebuffer found
         }
     }
-    // --- Non-blocking framebuffer animation loop: bouncing ball demo ---
-    uint32_t ball_x = 100, ball_y = 100;
-    int ball_dx = 2, ball_dy = 1;
-    const uint32_t ball_radius = 30;
-    // Draw static checkerboard background once
-    if (fb.width > 0 && fb.height > 0 && fb.bpp == 32) {
-        uint32_t *fb_ptr = (uint32_t *)0xfd000000;
-        uint32_t pixels_per_row = fb.pitch / 4;
-        for (uint32_t y = 0; y < fb.height; y++) {
-            for (uint32_t x = 0; x < fb.width; x++) {
-                int check = ((x / 40) % 2) ^ ((y / 40) % 2);
-                uint32_t color = check ? 0xCCCCCC : 0x222222;
-                fb_ptr[y * pixels_per_row + x] = color;
-            }
-        }
-    }
-    // Run animation for a fixed number of frames, then start shell
-    uint32_t prev_x = ball_x, prev_y = ball_y;
-    while (1) {
-        if (fb.width > 0 && fb.height > 0 && fb.bpp == 32) {
-            uint32_t *fb_ptr = (uint32_t *)0xfd000000;
-            uint32_t pixels_per_row = fb.pitch / 4;
-            // Compute new position
-            int next_x = ball_x + ball_dx;
-            int next_y = ball_y + ball_dy;
-            // Check for collision and reverse direction if needed
-            if ((int)next_x - (int)ball_radius < 0 || (int)next_x + (int)ball_radius >= (int)fb.width) ball_dx = -ball_dx;
-            if ((int)next_y - (int)ball_radius < 0 || (int)next_y + (int)ball_radius >= (int)fb.height) ball_dy = -ball_dy;
-            // Update position after collision check
-            next_x = ball_x + ball_dx;
-            next_y = ball_y + ball_dy;
-            // Erase only pixels that were in the previous ball but not in the new ball
-            int min_x = prev_x - ball_radius;
-            int max_x = prev_x + ball_radius;
-            int min_y = prev_y - ball_radius;
-            int max_y = prev_y + ball_radius;
-            for (int y = min_y; y <= max_y; y++) {
-                if (y < 0 || y >= (int)fb.height) continue;
-                for (int x = min_x; x <= max_x; x++) {
-                    if (x < 0 || x >= (int)fb.width) continue;
-                    int in_prev = ((x - (int)prev_x)*(x - (int)prev_x) + (y - (int)prev_y)*(y - (int)prev_y)) <= (int)(ball_radius*ball_radius);
-                    int in_new = ((x - next_x)*(x - next_x) + (y - next_y)*(y - next_y)) <= (int)(ball_radius*ball_radius);
-                    if (in_prev && !in_new) {
-                        int check = ((x / 40) % 2) ^ ((y / 40) % 2);
-                        uint32_t color = check ? 0xCCCCCC : 0x222222;
-                        fb_ptr[y * pixels_per_row + x] = color;
-                    }
-                }
-            }
-            // Draw new ball
-            for (int dy = -((int)ball_radius); dy <= (int)ball_radius; dy++) {
-                int y = next_y + dy;
-                if (y < 0 || y >= (int)fb.height) continue;
-                for (int dx = -((int)ball_radius); dx <= (int)ball_radius; dx++) {
-                    int x = next_x + dx;
-                    if (x < 0 || x >= (int)fb.width) continue;
-                    if (dx*dx + dy*dy <= (int)(ball_radius*ball_radius)) {
-                        fb_ptr[y * pixels_per_row + x] = 0xFF00FF;
-                    }
-                }
-            }
-            // Update prev and ball positions
-            prev_x = next_x;
-            prev_y = next_y;
-            ball_x = next_x;
-            ball_y = next_y;
-        }
-        // Run one shell step per frame
-        shell_run_step();
-        // Wait for 10ms per frame for smooth animation
-        wait_milliseconds(10);
-    }
+    // --- Start window manager main loop ---
+    window_manager_mainloop();
 }

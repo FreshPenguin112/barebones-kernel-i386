@@ -79,7 +79,7 @@ void framebuffer_detect(struct framebuffer_info *fb) {
         fb->width = framebuffer_bga_read_reg(BGA_REG_XRES);
         fb->height = framebuffer_bga_read_reg(BGA_REG_YRES);
         fb->bpp = framebuffer_bga_read_reg(BGA_REG_BPP);
-        fb->addr = (uint32_t *)(BGA_MMIO_BASE + 0x4000); // Default framebuffer offset
+        fb->addr = (uint32_t *)(0xfd000000); // Default framebuffer offset
         fb->found = 1;
         // Pitch is usually width * (bpp/8)
         fb->pitch = fb->width * (fb->bpp / 8);
