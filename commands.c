@@ -427,5 +427,77 @@ command_t commands[] = {
     {"run",      cmd_run,       "Run ELF executable"},
     {"rev",      cmd_rev,       "Reverse the given text"},
     {"exit",     cmd_exit,      "Exit the shell"},
+        {"less",     cmd_less,      "View text with scrolling"},
     {0, 0, 0}
 };
+// Basic less command: supports up/down arrow and q to quit
+void cmd_less(int argc, char **argv) {
+    const char *data = NULL;
+    unsigned int size = 0;
+    int from_pipe = 0;
+    if (argc >= 2) {
+        // If piped, argv[1] is the buffer
+        if (argc == 2 && argv[1][0] == '\x01') {
+            data = argv[1] + 1;
+            size = strlen(data);
+            from_pipe = 1;
+        } else {
+            data = tarfs_cat(argv[1], &size);
+            if (!data) {
+                kernel_print_ansi("No such file\n", "red", "none");
+                return;
+            }
+        }
+    } else {
+        kernel_print_ansi("Usage: less <file> or use with pipe\n", "red", "none");
+        return;
+    }
+
+    int lines = 0, max_lines = 0;
+    int line_starts[512];
+    line_starts[0] = 0;
+    for (unsigned int i = 0; i < size; i++) {
+        if (data[i] == '\n') {
+            lines++;
+            line_starts[lines] = i + 1;
+        }
+    }
+    max_lines = lines + 1;
+    int view_line = 0;
+    int running = 1;
+    while (running) {
+        ansi_clearhome();
+        for (int l = view_line; l < view_line + 20 && l < max_lines; l++) {
+            unsigned int start = line_starts[l];
+            unsigned int end = (l + 1 < max_lines) ? line_starts[l + 1] : size;
+            for (unsigned int j = start; j < end; j++) {
+                kernel_putc_ansi(data[j], "green", "none");
+            }
+        }
+        kernel_print_ansi("\n-- less: Up/Down to scroll, q to quit --\n", "yellow", "none");
+        while (1) {
+            if (serial_has_received()) {
+                char c = serial_read_char();
+                if (c == 'q') {
+                    running = 0;
+                    break;
+                }
+                if (c == '\033') {
+                    if (serial_has_received() && serial_read_char() == '[') {
+                        char dir = 0;
+                        if (serial_has_received()) dir = serial_read_char();
+                        if (dir == 'A' && view_line > 0) { // Up
+                            view_line--;
+                            break;
+                        }
+                        if (dir == 'B' && view_line < max_lines - 20) { // Down
+                            view_line++;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ansi_clearhome();
+}

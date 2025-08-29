@@ -221,55 +221,102 @@ void shell_run(void)
                 history_count = HISTORY_SIZE;
         }
 
-        // Parse and execute command
-        int argc = parse_input(input_buffer);
-
-        // Handle redirection
-        int redirect = 0;
-        char *out_file = 0;
-        for (int i = 0; i < argc; i++)
-        {
-            if (strcmp(argv[i], ">") == 0 && i + 1 < argc)
-            {
-                redirect = 1;
-                out_file = argv[i + 1];
-                argv[i] = 0; // Truncate argv for command
-                argc = i;
-                break;
-            }
-        }
-
-        if (argc > 0)
-        {
-            command_t *cmd = find_command(argv[0]);
-            if (cmd)
-            {
-                // If redirect, capture output (simple: only for echo)
-                if (redirect && strcmp(argv[0], "echo") == 0)
-                {
-                    // Concatenate args
-                    char buf[256];
-                    int pos = 0;
-                    for (int i = 1; i < argc && pos < 255; i++)
-                    {
-                        for (int j = 0; argv[i][j] && pos < 255; j++)
-                            buf[pos++] = argv[i][j];
-                        if (i < argc - 1 && pos < 255)
-                            buf[pos++] = ' ';
+        // Parse for pipe
+        char *pipe_pos = strchr(input_buffer, '|');
+        if (pipe_pos) {
+            // Split into two commands
+            *pipe_pos = 0;
+            char *first_cmd = input_buffer;
+            char *second_cmd = pipe_pos + 1;
+            // Trim spaces
+            while (*second_cmd == ' ') second_cmd++;
+            int argc1 = parse_input(first_cmd);
+            int argc2 = parse_input(second_cmd);
+            // Only support single pipe: first command output to buffer, pass to second as argv[1]
+            char pipe_buf[4096];
+            pipe_buf[0] = 0;
+            int pipe_len = 0;
+            // Only support hexdump and cat for now
+            if (strcmp(argv[0], "hexdump") == 0 && argc1 >= 2) {
+                unsigned int sz;
+                const char *data = tarfs_cat(argv[1], &sz);
+                if (!data) {
+                    kernel_print_ansi("No such file\n", "red", "none");
+                } else {
+                    // Dump to buffer
+                    for (unsigned int i = 0; i < sz && pipe_len < 4090; i++) {
+                        char hex[8];
+                        snprintf(hex, sizeof(hex), "%02X ", (unsigned char)data[i]);
+                        strcat(pipe_buf, hex);
+                        pipe_len += strlen(hex);
+                        if ((i+1)%16==0) { strcat(pipe_buf, "\n"); pipe_len++; }
                     }
-                    buf[pos] = 0;
-                    tarfs_write(out_file, buf, pos);
                 }
-                else
-                {
-                    cmd->func(argc, argv);
+            } else if (strcmp(argv[0], "cat") == 0 && argc1 >= 2) {
+                unsigned int sz;
+                const char *data = tarfs_cat(argv[1], &sz);
+                if (!data) {
+                    kernel_print_ansi("No such file\n", "red", "none");
+                } else {
+                    strncpy(pipe_buf, data, sz < 4095 ? sz : 4095);
+                    pipe_buf[sz < 4095 ? sz : 4095] = 0;
                 }
+            } else {
+                kernel_print_ansi("Pipe only supported for hexdump/cat | less\n", "red", "none");
+                continue;
             }
-            else
-            {
+            // Call second command with buffer as argv[1], prefixed with \x01 to mark as pipe
+            char *pipe_argv[2];
+            pipe_argv[0] = argv[0]; // Actually second command name
+            char pipe_arg[4096];
+            pipe_arg[0] = '\x01';
+            strncpy(pipe_arg+1, pipe_buf, 4094);
+            pipe_arg[4095] = 0;
+            pipe_argv[1] = pipe_arg;
+            command_t *cmd2 = find_command(argv[0]);
+            if (cmd2) {
+                cmd2->func(2, pipe_argv);
+            } else {
                 kernel_print_ansi("Unknown command: ", "red", "none");
                 kernel_print_ansi(argv[0], "red", "none");
                 kernel_print("\n");
+            }
+        } else {
+            int argc = parse_input(input_buffer);
+            // Handle redirection
+            int redirect = 0;
+            char *out_file = 0;
+            for (int i = 0; i < argc; i++) {
+                if (strcmp(argv[i], ">") == 0 && i + 1 < argc) {
+                    redirect = 1;
+                    out_file = argv[i + 1];
+                    argv[i] = 0; // Truncate argv for command
+                    argc = i;
+                    break;
+                }
+            }
+            if (argc > 0) {
+                command_t *cmd = find_command(argv[0]);
+                if (cmd) {
+                    if (redirect && strcmp(argv[0], "echo") == 0) {
+                        char buf[256];
+                        int pos = 0;
+                        for (int i = 1; i < argc && pos < 255; i++) {
+                            for (int j = 0; argv[i][j] && pos < 255; j++)
+                                buf[pos++] = argv[i][j];
+                            if (i < argc - 1 && pos < 255)
+                                buf[pos++] = ' ';
+                        }
+                        buf[pos] = 0;
+                        tarfs_write(out_file, buf, pos);
+                    } else {
+                        cmd->func(argc, argv);
+                    }
+                } else {
+                    kernel_print_ansi("Unknown command: ", "red", "none");
+                    kernel_print_ansi(argv[0], "red", "none");
+                    kernel_print("\n");
+                }
             }
         }
     }
