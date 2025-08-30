@@ -17,5 +17,11 @@ int atoi(const char *str);
 float atof(const char *str);
 double atod(const char *str);
 
+// Custom replacements for kernel
+char *strchr(const char *s, int c);
+char *strcat(char *dest, const char *src);
+char *strncpy(char *dest, const char *src, size_t n);
+void hex_byte_to_str(unsigned char byte, char *out);
+
 
 #endif

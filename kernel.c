@@ -1,3 +1,5 @@
+// Global flag to exit window manager
+volatile int wm_should_exit = 0;
 #include <stddef.h>
 #include <stdint.h>
 #include "shell.h" // Change to use quotes instead of angle brackets
@@ -20,6 +22,28 @@
 #define CLOSE_BTN_SIZE 16
 
 // -----------------------------------------------------------------------------
+// Output capture for piping
+static int output_capture_enabled = 0;
+static char *output_capture_buffer = 0;
+static size_t output_capture_bufsize = 0;
+static size_t output_capture_pos = 0;
+
+void kernel_output_capture_start(char *buf, size_t bufsize) {
+    output_capture_enabled = 1;
+    output_capture_buffer = buf;
+    output_capture_bufsize = bufsize;
+    output_capture_pos = 0;
+    if (output_capture_buffer && output_capture_bufsize > 0)
+        output_capture_buffer[0] = 0;
+}
+
+void kernel_output_capture_stop(void) {
+    output_capture_enabled = 0;
+    output_capture_buffer = 0;
+    output_capture_bufsize = 0;
+    output_capture_pos = 0;
+}
+
 // VGA text‐mode state
 // -----------------------------------------------------------------------------
 volatile uint16_t *vga_buffer = (uint16_t *)0xB8000;
@@ -158,8 +182,13 @@ void term_putc_vga(char c)
 // -----------------------------------------------------------------------------
 void kernel_putc(char c)
 {
-    serial_write_char(c);
-    term_putc_vga(c);
+    if (output_capture_enabled && output_capture_buffer && output_capture_pos < output_capture_bufsize - 1) {
+        output_capture_buffer[output_capture_pos++] = c;
+        output_capture_buffer[output_capture_pos] = 0;
+    } else {
+        serial_write_char(c);
+        term_putc_vga(c);
+    }
 }
 
 // send ESC [ … m to serial & update VGA; `seq` is digits only, no ‘m’
@@ -189,7 +218,8 @@ void kernel_print(const char *s)
                 j++;
             if (s[j] == 'm')
             {
-                kernel_handle_ansi_and_putc(&s[i + 2], j - (i + 2));
+                if (!output_capture_enabled)
+                    kernel_handle_ansi_and_putc(&s[i + 2], j - (i + 2));
                 i = j;
                 continue;
             }
@@ -264,23 +294,23 @@ void kernel_print_ansi(const char *text,
     int fg = ansi_fg_code(fg_name);
     int bg = ansi_bg_code(bg_name);
 
-    if (fg >= 0)
-    {
-        len = fmt_code(buf, fg);
-        kernel_handle_ansi_and_putc(buf, len);
+    if (!output_capture_enabled) {
+        if (fg >= 0)
+        {
+            len = fmt_code(buf, fg);
+            kernel_handle_ansi_and_putc(buf, len);
+        }
+        if (bg >= 0)
+        {
+            len = fmt_code(buf, bg);
+            kernel_handle_ansi_and_putc(buf, len);
+        }
     }
-    if (bg >= 0)
-    {
-        len = fmt_code(buf, bg);
-        kernel_handle_ansi_and_putc(buf, len);
-    }
-
     // now the text
     for (const char *p = text; *p; p++)
         kernel_putc(*p);
-
     // reset if we changed anything
-    if (fg >= 0 || bg >= 0)
+    if ((fg >= 0 || bg >= 0) && !output_capture_enabled)
         kernel_handle_ansi_and_putc("0", 1);
 }
 
@@ -293,22 +323,22 @@ void kernel_putc_ansi(const char text,
     int fg = ansi_fg_code(fg_name);
     int bg = ansi_bg_code(bg_name);
 
-    if (fg >= 0)
-    {
-        len = fmt_code(buf, fg);
-        kernel_handle_ansi_and_putc(buf, len);
+    if (!output_capture_enabled) {
+        if (fg >= 0)
+        {
+            len = fmt_code(buf, fg);
+            kernel_handle_ansi_and_putc(buf, len);
+        }
+        if (bg >= 0)
+        {
+            len = fmt_code(buf, bg);
+            kernel_handle_ansi_and_putc(buf, len);
+        }
     }
-    if (bg >= 0)
-    {
-        len = fmt_code(buf, bg);
-        kernel_handle_ansi_and_putc(buf, len);
-    }
-
     // now the text
     kernel_putc(text);
-
     // reset if we changed anything
-    if (fg >= 0 || bg >= 0)
+    if ((fg >= 0 || bg >= 0) && !output_capture_enabled)
         kernel_handle_ansi_and_putc("0", 1);
 }
 
@@ -327,8 +357,7 @@ void ansi_home(void)
 }
 void ansi_clearhome(void)
 {
-    ansi_clear();
-    ansi_home();
+    serial_write_str("\033[3J\033[H\033[2J");
 }
 
 // -----------------------------------------------------------------------------
@@ -357,7 +386,6 @@ extern void timer_handler_asm(void);
 void timer_handler(void)
 {
     timer_ticks++;
-    // kernel_print("."); // Debug: print a dot every tick
     outb(0x20, 0x20);
 }
 
@@ -652,7 +680,7 @@ void window_manager_mainloop(void) {
     int prev_mouse_x = -1, prev_mouse_y = -1;
     int prev_window_count = -1;
     unsigned int prev_window_hash = 0;
-    while (1) {
+    while (!wm_should_exit) {
         // Compute window state hash
         unsigned int window_hash = WM_window_count;
         for (int i = 0; i < WM_window_count; i++) {
@@ -879,4 +907,13 @@ void kernel_main(void)
     }
     // --- Start window manager main loop ---
     window_manager_mainloop();
+
+    // When window manager exits, switch to classic shell
+    ansi_clearhome();
+    term_init();
+    shell_run();
+    // Optionally halt after shell exits
+    while (1) {
+        asm volatile("hlt");
+    }
 }

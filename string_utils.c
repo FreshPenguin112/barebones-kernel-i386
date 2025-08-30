@@ -24,6 +24,48 @@ void strcpy(char *dest, const char *src)
         ;
 }
 
+    // Custom strchr implementation
+    char *strchr(const char *s, int c)
+    {
+        while (*s)
+        {
+            if (*s == (char)c)
+                return (char *)s;
+            s++;
+        }
+        return 0;
+    }
+
+    // Custom strcat implementation
+    char *strcat(char *dest, const char *src)
+    {
+        char *d = dest;
+        while (*d) d++;
+        while ((*d++ = *src++));
+        return dest;
+    }
+
+    // Custom strncpy implementation
+    char *strncpy(char *dest, const char *src, size_t n)
+    {
+        size_t i;
+        for (i = 0; i < n && src[i]; i++)
+            dest[i] = src[i];
+        for (; i < n; i++)
+            dest[i] = '\0';
+        return dest;
+    }
+
+    // Minimal hex formatting for hexdump (replaces snprintf)
+    void hex_byte_to_str(unsigned char byte, char *out)
+    {
+        const char hex[] = "0123456789ABCDEF";
+        out[0] = hex[(byte >> 4) & 0xF];
+        out[1] = hex[byte & 0xF];
+        out[2] = ' ';
+        out[3] = '\0';
+    }
+
 // Simple tokenizer that works with a single delimiter
 static char *next_token = 0;
 
