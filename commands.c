@@ -1,3 +1,9 @@
+#include <stdbool.h>
+// Declare the toggle function from kernel.c
+void toggle_window_manager(void);
+void cmd_togglewm(int argc, char **argv) {
+    toggle_window_manager();
+}
 #include "shell.h"
 #include "string_utils.h"
 #include "tarfs.h"
@@ -347,6 +353,7 @@ void cmd_help(int argc, char **argv)
     kernel_print("  hexdump <file> - Dump file in hex + ASCII\n");
     kernel_print("  exit       - Exit the shell\n");
     kernel_print("  rev <text> - Reverse the given text\n");
+    kernel_print("  togglewm   - Toggle window manager and black screen\n");
 }
 
 void cmd_exit(int argc, char **argv)
@@ -427,5 +434,6 @@ command_t commands[] = {
     {"run",      cmd_run,       "Run ELF executable"},
     {"rev",      cmd_rev,       "Reverse the given text"},
     {"exit",     cmd_exit,      "Exit the shell"},
+    {"togglewm", cmd_togglewm,  "Toggle window manager and black screen"},
     {0, 0, 0}
 };

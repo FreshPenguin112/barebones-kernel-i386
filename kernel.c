@@ -1,3 +1,17 @@
+#include <stdbool.h>
+
+// Global flag for window manager enabled/disabled
+static bool wm_enabled = true;
+
+// Exported function to toggle window manager
+void toggle_window_manager(void) {
+    wm_enabled = !wm_enabled;
+}
+
+// Exported function to check window manager state
+bool is_window_manager_enabled(void) {
+    return wm_enabled;
+}
 #include <stddef.h>
 #include <stdint.h>
 #include "shell.h" // Change to use quotes instead of angle brackets
@@ -317,7 +331,7 @@ void kernel_putc_ansi(const char text,
 // -----------------------------------------------------------------------------
 void ansi_clear(void)
 {
-    serial_write_str("\033[2J");
+    serial_write_str("\033[3J\033[2J");
     term_init();
 }
 void ansi_home(void)
@@ -652,21 +666,30 @@ void window_manager_mainloop(void) {
     int prev_mouse_x = -1, prev_mouse_y = -1;
     int prev_window_count = -1;
     unsigned int prev_window_hash = 0;
+    static int prev_wm_enabled = 1;
     while (1) {
+        if (!wm_enabled) {
+            // Fill framebuffer with black
+            for (int i = 0; i < fbw * fbh; i++) fb_ptr[i] = 0xFF000000;
+            wait_milliseconds(10);
+            shell_run_step();
+            prev_wm_enabled = 0;
+            continue;
+        }
+        int force_redraw = 0;
+        if (!prev_wm_enabled && wm_enabled) force_redraw = 1;
+        prev_wm_enabled = wm_enabled;
         // Compute window state hash
         unsigned int window_hash = WM_window_count;
         for (int i = 0; i < WM_window_count; i++) {
             window_hash ^= (WM_windows[i].x * 31 + WM_windows[i].y * 37 + WM_windows[i].w * 41 + WM_windows[i].h * 43 + WM_windows[i].alive * 47);
         }
-        int redraw = 0;
+        int redraw = force_redraw;
         if (WM_mouse_x != prev_mouse_x || WM_mouse_y != prev_mouse_y) redraw = 1;
         if (WM_window_count != prev_window_count) redraw = 1;
         if (window_hash != prev_window_hash) redraw = 1;
-        // Only redraw if something changed
         if (redraw) {
-            // 1. Clear mask to 0
             for (int i = 0; i < fbw * fbh; i++) mask[i] = 0;
-            // 2. Draw windows and set mask for covered pixels
             int focused = WM_window_count - 1;
             for (int i = 0; i < WM_window_count; i++) {
                 if (WM_windows[i].alive) {
@@ -684,28 +707,22 @@ void window_manager_mainloop(void) {
                     }
                 }
             }
-            // 3. Erase only uncovered regions (mask==0)
             for (int i = 0; i < fbw * fbh; i++) {
-                if (mask[i] == 0) fb_ptr[i] = 0xFF222222; // BGRA, force alpha
+                if (mask[i] == 0) fb_ptr[i] = 0xFF222222;
             }
-            // 4. Draw mouse cursor on top
             WM_draw_mouse(fb_ptr, fbw, fbh, WM_mouse_x, WM_mouse_y);
         }
-        // Save previous state
         prev_mouse_x = WM_mouse_x;
         prev_mouse_y = WM_mouse_y;
         prev_window_count = WM_window_count;
         prev_window_hash = window_hash;
-
-        // Only spawn on key press transition (debounce)
         static char prev_key = 0;
         if (WM_key == 'n' && prev_key != 'n') { WM_spawn(); }
         if (WM_key == 'x' && prev_key != 'x') {
             for (int i = 0; i < WM_window_count; i++) {
-                WM_windows[i].alive = 0; // Close all windows
+                WM_windows[i].alive = 0;
             }
         }
-        // Spawn as many windows as possible with 'a' key
         if (WM_key == 'a' && prev_key != 'a') {
             int to_spawn = WM_MAX_WINDOWS - WM_window_count;
             for (int i = 0; i < to_spawn; i++) {
@@ -744,7 +761,7 @@ void window_manager_mainloop(void) {
         if (WM_window_count == 0) {
             WM_spawn();
         }
-        shell_run_step(); // Run shell step to handle commands
+        shell_run_step();
         wait_milliseconds(10);
     }
 }
